@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>لوحة توليد الأكواد</title>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+  <style>
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: #121212;
+      color: white;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #00ffcc;
+    }
+    .btn {
+      background-color: #00ffcc;
+      color: #000;
+      padding: 10px 20px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      border-radius: 5px;
+      margin: 10px 0;
+    }
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #555;
+      padding: 10px;
+      text-align: center;
+    }
+    .restart-btn {
+      background-color: #ff9900;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    .delete-btn {
+      background-color: red;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    .copy-btn {
+      background-color: #00ccff;
+      color: #000;
+      border: none;
+      padding: 3px 7px;
+      cursor: pointer;
+      border-radius: 5px;
+      margin-left: 5px;
+      font-size: 12px;
+    }
+    input {
+      padding: 5px;
+      margin-right: 10px;
+      border-radius: 5px;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>لوحة توليد أكواد الطلاب 🔐</h1>
+
+  <div>
+    <input type="number" id="minutesInput" placeholder="عدد الدقائق" min="1">
+    <button class="btn" onclick="generateCode()">توليد كود جديد</button>
+  </div>
+
+  <table id="codesTable">
+    <thead>
+      <tr>
+        <th>الكود</th>
+        <th>Code ID</th>
+        <th>تاريخ الإنشاء</th>
+        <th>تاريخ الانتهاء</th>
+        <th>حالة الكود</th>
+        <th>إعادة تفعيل</th>
+        <th>حذف</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    const firebaseConfig = {
+      databaseURL: "https://alamer-526ff-default-rtdb.firebaseio.com/"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const codesRef = db.ref("codes");
+
+    function generateCode() {
+      const minutes = parseInt(document.getElementById("minutesInput").value);
+      if (isNaN(minutes) || minutes <= 0) {
+        alert("يرجى إدخال عدد دقائق صالح.");
+        return;
+      }
+      const code = generateRandomCode();
+      const now = Date.now();
+      const expire = now + (minutes * 60 * 1000); // بعد عدد الدقائق المحدد
+
+      codesRef.push({
+        code: code,
+        timestamp: now,
+        expire: expire,
+        usedByDeviceId: null
+      });
+    }
+
+    function generateRandomCode(length = 10) {
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+      let result = "";
+      for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
+    }
+
+    function formatDate(ms) {
+      const date = new Date(ms);
+      return date.toLocaleDateString("ar-EG") + " - " + date.toLocaleTimeString("ar-EG");
+    }
+
+    function restartCode(key) {
+      const minutes = parseInt(prompt("أدخل عدد الدقائق الجديدة:", "1"));
+      if (isNaN(minutes) || minutes <= 0) {
+        alert("عدد دقائق غير صالح.");
+        return;
+      }
+      const now = Date.now();
+      const expire = now + (minutes * 60 * 1000);
+      codesRef.child(key).update({
+        timestamp: now,
+        expire: expire,
+        usedByDeviceId: null
+      });
+    }
+
+    function deleteCode(key) {
+      if (confirm("هل تريد حذف هذا الكود نهائياً؟")) {
+        codesRef.child(key).remove();
+      }
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert("تم نسخ: " + text);
+      });
+    }
+
+    // عرض الأكواد
+    codesRef.on("value", snapshot => {
+      const tbody = document.querySelector("#codesTable tbody");
+      tbody.innerHTML = "";
+      snapshot.forEach(child => {
+        const data = child.val();
+        const tr = document.createElement("tr");
+
+        let status = "غير مستخدم";
+        if (data.deviceId) {
+          status = "مفعل ✅";
+        }
+
+        tr.innerHTML = `
+          <td>${data.code}</td>
+          <td>
+            ${child.key}
+            <button class="copy-btn" onclick="copyToClipboard('${child.key}')">📋</button>
+          </td>
+          <td>${formatDate(data.timestamp)}</td>
+          <td>${formatDate(data.expire)}</td>
+          <td>${status}</td>
+          <td><button class="restart-btn" onclick="restartCode('${child.key}')">🔄</button></td>
+          <td><button class="delete-btn" onclick="deleteCode('${child.key}')">🗑</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    });
+  </script>
+</body>
+</html>
