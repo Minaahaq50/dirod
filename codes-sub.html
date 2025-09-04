@@ -203,7 +203,7 @@
 
         // تحديد حالة الكود
         let status = "غير مستخدم";
-        if (data.usedByDeviceId) {
+        if (data.DeviceId) {
           status = "مفعل ✅";
         } else if (Date.now() > data.expire) {
           status = "منتهي ❌";
