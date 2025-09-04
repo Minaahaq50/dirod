@@ -51,14 +51,16 @@
       overflow: hidden;
       box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       transition: transform 0.2s;
+      cursor: pointer;
     }
     .video-card:hover {
       transform: scale(1.03);
     }
     .video-thumb {
       width: 100%;
-      height: 180px;
+      height: 200px;
       object-fit: cover;
+      border-bottom: 2px solid #334155;
     }
     .video-info {
       padding: 15px;
@@ -74,13 +76,6 @@
       color: #cbd5e1;
       font-size: 14px;
     }
-    iframe, video {
-      width: 100%;
-      height: 200px;
-      border: none;
-      border-radius: 10px;
-      margin-top: 10px;
-    }
     .actions {
       display: flex;
       justify-content: space-between;
@@ -95,6 +90,46 @@
     }
     .edit-btn { background: #f59e0b; color: #fff; }
     .delete-btn { background: #ef4444; color: #fff; }
+
+    /* نافذة الفيديو */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background: #1e293b;
+      padding: 15px;
+      border-radius: 10px;
+      max-width: 800px;
+      width: 90%;
+      text-align: center;
+      position: relative;
+    }
+    .modal-content iframe,
+    .modal-content video {
+      width: 100%;
+      height: 450px;
+      border-radius: 10px;
+    }
+    .close-btn {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: #ef4444;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -113,8 +148,15 @@
 
   <div class="videos-grid" id="videosList"></div>
 
+  <!-- نافذة الفيديو -->
+  <div class="modal" id="videoModal">
+    <div class="modal-content">
+      <button class="close-btn" onclick="closeModal()">✖</button>
+      <div id="videoPlayer"></div>
+    </div>
+  </div>
+
   <script>
-    // Firebase config
     const firebaseConfig = {
       databaseURL: "https://alamer-526ff-default-rtdb.firebaseio.com/"
     };
@@ -143,7 +185,6 @@
       });
     });
 
-    // عند اختيار مادة → تحميل المدرسين
     subjectSelect.addEventListener("change", () => {
       teacherSelect.innerHTML = `<option value="">اختر المدرس</option>`;
       if (!subjectSelect.value) return;
@@ -164,7 +205,6 @@
       });
     });
 
-    // عند اختيار مدرس → تحميل الفيديوهات
     teacherSelect.addEventListener("change", () => {
       loadVideos(subjectSelect.value, teacherSelect.value);
     });
@@ -175,25 +215,17 @@
         videosList.innerHTML = "";
         snapshot.forEach(child => {
           const data = child.val();
-          if (data.subject !== subject) return; // فلترة بالمادة + المدرس
+          if (data.subject !== subject) return;
 
           const card = document.createElement("div");
           card.className = "video-card";
 
-          let videoElement = "";
-          if (data.url.includes("youtube.com") || data.url.includes("youtu.be")) {
-            videoElement = `<iframe src="${data.url}" allowfullscreen></iframe>`;
-          } else {
-            videoElement = `<video controls><source src="${data.url}" type="video/mp4"></video>`;
-          }
-
           card.innerHTML = `
-            <img class="video-thumb" src="${data.imageUrl || ''}" alt="صورة الفيديو">
+            <img class="video-thumb" src="${data.imageUrl || ''}" alt="صورة الفيديو" onclick="openModal('${data.url}')">
             <div class="video-info">
               <h3>${data.title}</h3>
               <p>📘 ${data.subject}</p>
               <p>👨‍🏫 ${data.teacher}</p>
-              ${videoElement}
               <div class="actions">
                 <button class="btn edit-btn" onclick="editVideo('${child.key}','${data.title}','${data.url}','${data.subject}','${data.teacher}','${data.imageUrl || ''}')">✏️ تعديل</button>
                 <button class="btn delete-btn" onclick="deleteVideo('${child.key}')">🗑 حذف</button>
@@ -205,14 +237,33 @@
       });
     }
 
-    // حذف الفيديو
+    // فتح الفيديو في النافذة
+    function openModal(url) {
+      const modal = document.getElementById("videoModal");
+      const player = document.getElementById("videoPlayer");
+
+      if (url.includes("youtube.com") || url.includes("youtu.be")) {
+        player.innerHTML = `<iframe src="${url}" allowfullscreen></iframe>`;
+      } else {
+        player.innerHTML = `<video controls autoplay><source src="${url}" type="video/mp4"></video>`;
+      }
+
+      modal.style.display = "flex";
+    }
+
+    function closeModal() {
+      const modal = document.getElementById("videoModal");
+      const player = document.getElementById("videoPlayer");
+      modal.style.display = "none";
+      player.innerHTML = ""; // عشان يوقف الفيديو
+    }
+
     function deleteVideo(key) {
       if (confirm("هل تريد حذف هذا الفيديو؟")) {
         db.ref("videos/" + key).remove();
       }
     }
 
-    // تعديل الفيديو
     function editVideo(key, oldTitle, oldUrl, oldSubject, oldTeacher, oldImage) {
       const newTitle = prompt("اكتب العنوان الجديد:", oldTitle);
       if (!newTitle) return;
