@@ -2,155 +2,162 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>لوحة توليد الأكواد - المسؤول فقط</title>
+  <title>لوحة توليد الأكواد - Admin</title>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <style>
-    body { font-family: 'Cairo', sans-serif; background: #121212; color: white; padding: 20px; }
-    h1 { text-align: center; color: #00ffcc; }
-    input, button { padding: 10px; margin: 5px; border-radius: 5px; border: none; }
-    button { cursor: pointer; font-weight: bold; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #555; padding: 10px; text-align: center; }
-    .hidden { display: none; }
+    body { font-family: 'Cairo', sans-serif; background:#121212; color:white; padding:20px; }
+    h1 { text-align:center; color:#00ffcc; }
+    .btn { background:#00ffcc; color:#000; padding:10px 20px; border:none; cursor:pointer; font-weight:bold; border-radius:5px; margin:10px 5px; }
+    table { width:100%; margin-top:20px; border-collapse:collapse; }
+    th, td { border:1px solid #555; padding:10px; text-align:center; }
+    .restart-btn { background:#ff9900; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:5px; }
+    .delete-btn { background:red; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:5px; }
+    .copy-btn { background:#00ccff; color:#000; border:none; padding:3px 7px; cursor:pointer; border-radius:5px; margin-left:5px; font-size:12px; }
+    input { padding:5px; margin-right:10px; border-radius:5px; border:none; }
+    #loginBox { max-width:400px; margin:50px auto; text-align:center; }
   </style>
 </head>
 <body>
+  <h1>لوحة توليد الأكواد - Admin فقط 🔐</h1>
 
-<h1>لوحة توليد الأكواد - المسؤول فقط</h1>
+  <div id="loginBox">
+    <h2>تسجيل الدخول كـ Admin</h2>
+    <input type="email" id="email" placeholder="البريد الإلكتروني"><br><br>
+    <input type="password" id="password" placeholder="كلمة المرور"><br><br>
+    <button class="btn" onclick="adminLogin()">تسجيل الدخول</button>
+    <p id="status"></p>
+  </div>
 
-<div id="loginDiv">
-  <input type="email" id="email" placeholder="الإيميل">
-  <input type="password" id="password" placeholder="كلمة المرور">
-  <button onclick="login()">تسجيل الدخول</button>
-  <p id="loginStatus"></p>
-</div>
+  <div id="adminPanel" style="display:none;">
+    <input type="number" id="minutesInput" placeholder="عدد الدقائق" min="1">
+    <button class="btn" onclick="generateCode()">توليد اكواد تجربة</button>
+    <button class="btn" onclick="generateMonthlyCode()">توليد اكواد اشتراك</button>
 
-<div id="panelDiv" class="hidden">
-  <input type="number" id="minutesInput" placeholder="عدد الدقائق">
-  <button onclick="generateCode()">توليد كود تجربة</button>
-  <button onclick="generateMonthlyCode()">توليد كود اشتراك</button>
+    <table id="codesTable">
+      <thead>
+        <tr>
+          <th>الكود</th>
+          <th>Code ID</th>
+          <th>تاريخ الإنشاء</th>
+          <th>تاريخ الانتهاء</th>
+          <th>حالة الكود</th>
+          <th>إعادة تفعيل</th>
+          <th>حذف</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
 
-  <table id="codesTable">
-    <thead>
-      <tr>
-        <th>الكود</th>
-        <th>Code ID</th>
-        <th>تاريخ الإنشاء</th>
-        <th>تاريخ الانتهاء</th>
-        <th>حالة الكود</th>
-        <th>إعادة تفعيل</th>
-        <th>حذف</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-</div>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCdhj73cKJc2J2_tDHw2-89EemZx-EGMJQ",
+      authDomain: "alamer-526ff.firebaseapp.com",
+      databaseURL: "https://alamer-526ff-default-rtdb.firebaseio.com",
+      projectId: "alamer-526ff",
+      storageBucket: "alamer-526ff.appspot.com",
+      messagingSenderId: "523879269039",
+      appId: "1:523879269039:web:634861aa34641bfebf8a5a",
+      measurementId: "G-4L48BTMLHB"
+    };
 
-<script>
-  const firebaseConfig = {
-   apiKey: "AIzaSyCdhj73cKJc2J2_tDHw2-89EemZx-EGMJQ",
-  authDomain: "alamer-526ff.firebaseapp.com",
-  databaseURL: "https://alamer-526ff-default-rtdb.firebaseio.com",
-  projectId: "alamer-526ff",
-  storageBucket: "alamer-526ff.firebasestorage.app",
-  messagingSenderId: "523879269039",
-  appId: "1:523879269039:web:634861aa34641bfebf8a5a",
-  measurementId: "G-4L48BTMLHB"
-};
-  firebase.initializeApp(firebaseConfig);
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const auth = firebase.auth();
 
-  const auth = firebase.auth();
-  const db = firebase.database();
-  const codesRef = db.ref("codes");
+    const ADMIN_UID = "Se5eNLTKoqUGjeShmRJRHDiKogF3"; // ضع UID الخاص بالـ Admin
 
-  const adminUID = "UID_المسؤول"; // ضع هنا UID المسؤول
+    function adminLogin() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      const status = document.getElementById("status");
 
-  function login() {
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
-    const status = document.getElementById("loginStatus");
+      auth.signInWithEmailAndPassword(email, password)
+        .then(userCredential => {
+          if (userCredential.user.uid === ADMIN_UID) {
+            status.textContent = "✅ تم تسجيل الدخول كـ Admin";
+            document.getElementById("loginBox").style.display = "none";
+            document.getElementById("adminPanel").style.display = "block";
+            loadCodes();
+          } else {
+            status.textContent = "❌ ليس لديك صلاحية الدخول";
+            auth.signOut();
+          }
+        })
+        .catch(error => status.textContent = "❌ " + error.message);
+    }
 
-    auth.signInWithEmailAndPassword(email, password)
-      .then(userCredential => {
-        if(userCredential.user.uid !== adminUID){
-          status.textContent = "❌ ليس لديك صلاحية الوصول!";
-          auth.signOut();
-        } else {
-          document.getElementById("loginDiv").classList.add("hidden");
-          document.getElementById("panelDiv").classList.remove("hidden");
-          status.textContent = "";
-          loadCodes();
-        }
-      })
-      .catch(error => {
-        status.textContent = "❌ " + error.message;
+    const codesRef = db.ref("codes");
+
+    function generateCode() {
+      const minutes = parseInt(document.getElementById("minutesInput").value);
+      if (isNaN(minutes) || minutes <= 0) return alert("عدد دقائق غير صالح");
+      const code = generateRandomCode();
+      const now = Date.now();
+      const expire = now + minutes * 60 * 1000;
+      codesRef.push({ code, timestamp: now, expire, usedByDeviceId: null });
+    }
+
+    function generateMonthlyCode() {
+      const code = generateRandomCode();
+      const now = Date.now();
+      const expire = now + 30*24*60*60*1000;
+      codesRef.push({ code, timestamp: now, expire, usedByDeviceId: null });
+    }
+
+    function generateRandomCode(length = 8) {
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+      let result = "";
+      for (let i = 0; i < length; i++) result += chars.charAt(Math.floor(Math.random()*chars.length));
+      return Date.now().toString(36).toUpperCase() + "-" + result;
+    }
+
+    function formatDate(ms) {
+      const date = new Date(ms);
+      return date.toLocaleDateString("ar-EG") + " - " + date.toLocaleTimeString("ar-EG");
+    }
+
+    function restartCode(key) {
+      const minutes = parseInt(prompt("أدخل عدد الدقائق الجديدة:", "1"));
+      if (isNaN(minutes) || minutes <= 0) return alert("عدد دقائق غير صالح");
+      const now = Date.now();
+      const expire = now + minutes*60*1000;
+      codesRef.child(key).update({ timestamp: now, expire, usedByDeviceId: null });
+    }
+
+    function deleteCode(key) {
+      if (confirm("هل تريد حذف هذا الكود نهائياً؟")) codesRef.child(key).remove();
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(()=>alert("تم نسخ: "+text));
+    }
+
+    function loadCodes() {
+      codesRef.on("value", snapshot => {
+        const tbody = document.querySelector("#codesTable tbody");
+        tbody.innerHTML = "";
+        snapshot.forEach(child => {
+          const data = child.val();
+          const tr = document.createElement("tr");
+          let status = "غير مستخدم";
+          if (data.deviceId) status="مفعل ✅";
+          else if (Date.now()>data.expire) status="منتهي ❌";
+          tr.innerHTML = `
+            <td>${data.code}</td>
+            <td>${child.key} <button class="copy-btn" onclick="copyToClipboard('${child.key}')">📋</button></td>
+            <td>${formatDate(data.timestamp)}</td>
+            <td>${formatDate(data.expire)}</td>
+            <td>${status}</td>
+            <td><button class="restart-btn" onclick="restartCode('${child.key}')">🔄</button></td>
+            <td><button class="delete-btn" onclick="deleteCode('${child.key}')">🗑</button></td>
+          `;
+          tbody.appendChild(tr);
+        });
       });
-  }
-
-  function generateRandomCode(length = 8){
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let result = "";
-    for(let i=0;i<length;i++) result += chars.charAt(Math.floor(Math.random()*chars.length));
-    return Date.now().toString(36).toUpperCase() + "-" + result;
-  }
-
-  function generateCode(){
-    const minutes = parseInt(document.getElementById("minutesInput").value);
-    if(isNaN(minutes) || minutes <= 0) return alert("أدخل عدد دقائق صالح");
-    const code = generateRandomCode();
-    const now = Date.now();
-    const expire = now + (minutes*60*1000);
-    codesRef.push({ code, timestamp: now, expire, deviceId: null });
-  }
-
-  function generateMonthlyCode(){
-    const code = generateRandomCode();
-    const now = Date.now();
-    const expire = now + (30*24*60*60*1000);
-    codesRef.push({ code, timestamp: now, expire, deviceId: null });
-  }
-
-  function formatDate(ms){
-    const date = new Date(ms);
-    return date.toLocaleDateString("ar-EG") + " - " + date.toLocaleTimeString("ar-EG");
-  }
-
-  function restartCode(key){
-    const minutes = parseInt(prompt("أدخل عدد الدقائق الجديدة:", "1"));
-    if(isNaN(minutes) || minutes <= 0) return alert("عدد دقائق غير صالح");
-    const now = Date.now();
-    const expire = now + (minutes*60*1000);
-    codesRef.child(key).update({ timestamp: now, expire, deviceId: null });
-  }
-
-  function deleteCode(key){ if(confirm("هل تريد حذف هذا الكود نهائياً؟")) codesRef.child(key).remove(); }
-
-  function loadCodes(){
-    codesRef.on("value", snapshot=>{
-      const tbody = document.querySelector("#codesTable tbody");
-      tbody.innerHTML="";
-      snapshot.forEach(child=>{
-        const data = child.val();
-        const tr = document.createElement("tr");
-        let status="غير مستخدم";
-        if(data.deviceId) status="مفعل ✅";
-        else if(Date.now()>data.expire) status="منتهي ❌";
-        tr.innerHTML=`
-          <td>${data.code}</td>
-          <td>${child.key}</td>
-          <td>${formatDate(data.timestamp)}</td>
-          <td>${formatDate(data.expire)}</td>
-          <td>${status}</td>
-          <td><button onclick="restartCode('${child.key}')">🔄</button></td>
-          <td><button onclick="deleteCode('${child.key}')">🗑</button></td>
-        `;
-        tbody.appendChild(tr);
-      });
-    });
-  }
-</script>
-
+    }
+  </script>
 </body>
 </html>
