@@ -2,7 +2,7 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>عرض الفيديوهات</title>
+  <title>عرض الفيديوهات حسب المادة</title>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
   <style>
@@ -13,8 +13,11 @@
       padding: 20px;
       text-align: center;
     }
-    h1 {
-      color: #00ffcc;
+    h1 { color: #00ffcc; }
+    select {
+      padding: 8px;
+      border-radius: 5px;
+      margin: 15px;
     }
     .video-container {
       margin: 20px auto;
@@ -30,14 +33,24 @@
       border-radius: 10px;
       border: none;
     }
-    h3 {
-      margin: 10px 0;
-      color: #ffcc00;
+    h3 { margin: 10px 0; color: #ffcc00; }
+    .btn {
+      margin: 5px;
+      padding: 5px 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
     }
+    .delete-btn { background-color: red; color: white; }
+    .edit-btn { background-color: #ff9900; color: white; }
   </style>
 </head>
 <body>
-  <h1>📺 قائمة الفيديوهات</h1>
+  <h1>📺 فيديوهات المواد</h1>
+
+  <label for="subjectSelect">اختر المادة:</label>
+  <select id="subjectSelect"></select>
+
   <div id="videosList"></div>
 
   <script>
@@ -46,39 +59,83 @@
       databaseURL: "https://alamer-526ff-default-rtdb.firebaseio.com/"
     };
     firebase.initializeApp(firebaseConfig);
-
     const db = firebase.database();
     const videosRef = db.ref("videos");
 
-    // جلب الفيديوهات وعرضها
+    // تحميل المواد (Subjects) في القائمة المنسدلة
     videosRef.on("value", snapshot => {
+      const subjectSelect = document.getElementById("subjectSelect");
+      subjectSelect.innerHTML = "";
+
+      snapshot.forEach(subjectSnap => {
+        const option = document.createElement("option");
+        option.value = subjectSnap.key;
+        option.textContent = subjectSnap.key;
+        subjectSelect.appendChild(option);
+      });
+
+      if (subjectSelect.value) {
+        loadVideos(subjectSelect.value);
+      }
+    });
+
+    // عند تغيير المادة
+    document.getElementById("subjectSelect").addEventListener("change", e => {
+      loadVideos(e.target.value);
+    });
+
+    // عرض الفيديوهات لمادة معينة
+    function loadVideos(subject) {
       const container = document.getElementById("videosList");
       container.innerHTML = "";
-      
-      snapshot.forEach(child => {
-        const data = child.val();
 
-        const videoDiv = document.createElement("div");
-        videoDiv.className = "video-container";
+      db.ref("videos/" + subject).on("value", snapshot => {
+        container.innerHTML = "";
+        snapshot.forEach(child => {
+          const data = child.val();
 
-        let videoElement = "";
+          const videoDiv = document.createElement("div");
+          videoDiv.className = "video-container";
 
-        if (data.url.includes("youtube.com") || data.url.includes("youtu.be")) {
-          // لو الرابط يوتيوب
-          videoElement = `<iframe src="${data.url}" allowfullscreen></iframe>`;
-        } else {
-          // لو الفيديو مرفوع Firebase Storage
-          videoElement = `<video controls><source src="${data.url}" type="video/mp4"></video>`;
-        }
+          let videoElement = "";
+          if (data.url.includes("youtube.com") || data.url.includes("youtu.be")) {
+            videoElement = `<iframe src="${data.url}" allowfullscreen></iframe>`;
+          } else {
+            videoElement = `<video controls><source src="${data.url}" type="video/mp4"></video>`;
+          }
 
-        videoDiv.innerHTML = `
-          <h3>${data.title}</h3>
-          ${videoElement}
-        `;
+          videoDiv.innerHTML = `
+            <h3>${data.title}</h3>
+            ${videoElement}
+            <br>
+            <button class="btn edit-btn" onclick="editVideo('${subject}','${child.key}','${data.title}','${data.url}')">✏️ تعديل</button>
+            <button class="btn delete-btn" onclick="deleteVideo('${subject}','${child.key}')">🗑 حذف</button>
+          `;
 
-        container.appendChild(videoDiv);
+          container.appendChild(videoDiv);
+        });
       });
-    });
+    }
+
+    // حذف الفيديو
+    function deleteVideo(subject, key) {
+      if (confirm("هل تريد حذف هذا الفيديو؟")) {
+        db.ref("videos/" + subject + "/" + key).remove();
+      }
+    }
+
+    // تعديل الفيديو
+    function editVideo(subject, key, oldTitle, oldUrl) {
+      const newTitle = prompt("اكتب العنوان الجديد:", oldTitle);
+      if (!newTitle) return;
+      const newUrl = prompt("اكتب رابط الفيديو الجديد:", oldUrl);
+      if (!newUrl) return;
+
+      db.ref("videos/" + subject + "/" + key).update({
+        title: newTitle,
+        url: newUrl
+      });
+    }
   </script>
 </body>
 </html>
