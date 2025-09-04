@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة التحكم</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #fff;
+      text-align: center;
+    }
+
+    header {
+      background: #222;
+      padding: 20px;
+      font-size: 24px;
+      font-weight: bold;
+      box-shadow: 0 0 10px #000;
+    }
+
+    .menu {
+      margin-top: 40px;
+    }
+
+    .btn {
+      display: block;
+      margin: 20px auto;
+      padding: 15px 25px;
+      width: 250px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #fff;
+      background: linear-gradient(135deg, #00b09b, #96c93d);
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 15px rgba(0,255,200,0.7);
+    }
+  </style>
+</head>
+<body>
+  <header>📊 لوحة تحكم التطبيق</header>
+
+  <div class="menu">
+    <button class="btn" onclick="goToPage('upload.html')">📤 نشر فيديوهات</button>
+    <button class="btn" onclick="goToPage('codes-test.html')">🧪 أكواد أونلاين تجربة</button>
+    <button class="btn" onclick="goToPage('codes-sub.html')">💳 أكواد اشتراكات</button>
+    <button class="btn" onclick="goToPage('my-videos.html')">🎥 قائمة فيديوهاتي</button>
+  </div>
+
+  <script>
+    function goToPage(page) {
+      window.location.href = page;
+    }
+  </script>
+</body>
+</html>
