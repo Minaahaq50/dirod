@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>لوحة نشر الفيديوهات + إحصائيات</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: white;
+      padding: 20px;
+    }
+    input, select, button {
+      padding: 10px;
+      margin: 5px 0;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    input, select {
+      width: 300px;
+      background-color: #1e1e1e;
+      color: white;
+    }
+    button {
+      background-color: #6200ee;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #3700b3;
+    }
+
+    /* Toast */
+    .toast {
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 16px;
+      display: none;
+      animation: fadeIn 0.5s, fadeOut 0.5s 2s;
+    }
+    .toast.success {
+      background-color: #2e7d32;
+      color: #fff;
+    }
+    .toast.error {
+      background-color: #c62828;
+      color: #fff;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(-10px); }
+    }
+
+    canvas {
+      background: #1e1e1e;
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>📤 نشر فيديو جديد</h2>
+  <input type="text" id="titleInput" placeholder="عنوان الفيديو"><br>
+  <input type="text" id="urlInput" placeholder="رابط الفيديو بصيغة embed"><br>
+  <input type="text" id="imageInput" placeholder="رابط صورة الفيديو (thumbnail)"><br>
+  
+  <select id="subjectInput" onchange="updateTeachers()">
+    <option value="" disabled selected>اختر المادة</option>
+    <option value="عربي">عربي</option>
+    <option value="إنجليزي">إنجليزي</option>
+    <option value="جغرافيا">جغرافيا</option>
+    <option value="تاريخ">تاريخ</option>
+    <option value="فيزياء">فيزياء</option>
+    <option value="كيمياء">كيمياء</option>
+    <option value="أحياء">أحياء</option>
+    <option value="ادبي">ادبي</option>
+  </select><br>
+
+  <select id="teacherInput" disabled>
+    <option value="" disabled selected>اختر مدرس</option>
+  </select><br>
+
+  <button onclick="publishVideo()">نشر الفيديو</button>
+
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <h2>📊 إحصائيات الفيديوهات حسب المادة</h2>
+  <canvas id="videosChart" width="400" height="200"></canvas>
+
+  <script>
+    // إعدادات Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyCdhj73cKJc2J2_tDHw2-89EemZx-EGMJQ",
+  authDomain: "alamer-526ff.firebaseapp.com",
+  databaseURL: "https://alamer-526ff-default-rtdb.firebaseio.com",
+  projectId: "alamer-526ff",
+  storageBucket: "alamer-526ff.firebasestorage.app",
+  messagingSenderId: "523879269039",
+  appId: "1:523879269039:web:634861aa34641bfebf8a5a",
+  measurementId: "G-4L48BTMLHB"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // تعريف المدرسين لكل مادة
+    const teachersPerSubject = {
+      "عربي": ["محمد صلاح", "رضا فاروق", "مدرس ج"],
+      "إنجليزي": ["مس مي", "عبقري اللغه", "وائل ميلاد"],
+      "جغرافيا": ["مدرس 1", "مدرس 2", "مدرس 3"],
+      "تاريخ": ["مدرس 1", "مدرس 2", "مدرس 3"],
+      "فيزياء": ["كيرلس القص ", "عبد المعبود 2", "فيزيائي 3"],
+      "كيمياء": ["خالد صقر", "عبد الجواد", "جون جهبذ"],
+      "أحياء": ["احمد الجوهري", "احمد ايمن", "الجيو", "امنيه السيد"],
+      "ادبي": ["المؤرخ(ت)", "القيصر(ج)", "جيو ماجد","جوهري(جيو)"]
+    };
+
+    // تحديث قائمة المدرسين بناءً على المادة
+    function updateTeachers() {
+      const subject = document.getElementById("subjectInput").value;
+      const teacherSelect = document.getElementById("teacherInput");
+      teacherSelect.innerHTML = '<option value="" disabled selected>اختر مدرس</option>';
+
+      if (!subject || !teachersPerSubject[subject]) {
+        teacherSelect.disabled = true;
+        return;
+      }
+
+      teachersPerSubject[subject].forEach(teacher => {
+        const option = document.createElement("option");
+        option.value = teacher;
+        option.textContent = teacher;
+        teacherSelect.appendChild(option);
+      });
+      teacherSelect.disabled = false;
+    }
+
+    // نشر الفيديو في Firebase
+    function publishVideo() {
+      const title = document.getElementById("titleInput").value.trim();
+      const url = document.getElementById("urlInput").value.trim();
+      const imageUrl = document.getElementById("imageInput").value.trim();
+      const subject = document.getElementById("subjectInput").value;
+      const teacher = document.getElementById("teacherInput").value;
+
+      if (!title || !url || !imageUrl || !subject || !teacher) {
+        showToast("من فضلك املأ كل الحقول بما فيها رابط الصورة", true);
+        return;
+      }
+
+      const videoId = Date.now();
+      db.ref("videos/" + videoId).set({ title, url, imageUrl, subject, teacher }, (error) => {
+        if (error) {
+          showToast("حدث خطأ أثناء النشر، حاول مرة أخرى.", true);
+        } else {
+          showToast("تم النشر بنجاح ✅");
+          // reset fields
+          document.getElementById("titleInput").value = "";
+          document.getElementById("urlInput").value = "";
+          document.getElementById("imageInput").value = "";
+          document.getElementById("subjectInput").selectedIndex = 0;
+          document.getElementById("teacherInput").innerHTML = '<option value="" disabled selected>اختر مدرس</option>';
+          document.getElementById("teacherInput").disabled = true;
+        }
+      });
+    }
+
+    // دالة عرض Toast
+    function showToast(message, isError = false) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.className = "toast " + (isError ? "error" : "success");
+      toast.style.display = "block";
+      setTimeout(() => { toast.style.display = "none"; }, 2500);
+    }
+
+    // ====== إحصائيات الفيديوهات ======
+    const subjects = ["عربي", "إنجليزي", "جغرافيا", "تاريخ", "فيزياء", "كيمياء", "أحياء", "ادبي"];
+    let counts = {};
+    subjects.forEach(sub => counts[sub] = 0);
+
+    db.ref("videos").on("value", (snapshot) => {
+      subjects.forEach(sub => counts[sub] = 0);
+
+      snapshot.forEach(child => {
+        const data = child.val();
+        if (counts[data.subject] !== undefined) {
+          counts[data.subject]++;
+        }
+      });
+
+      updateChart();
+    });
+
+    let chart;
+    function updateChart() {
+      const ctx = document.getElementById("videosChart").getContext("2d");
+      if (chart) chart.destroy();
+
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: subjects,
+          datasets: [{
+            label: 'عدد الفيديوهات',
+            data: subjects.map(sub => counts[sub]),
+            backgroundColor: 'rgba(98, 0, 238, 0.7)',
+            borderColor: 'rgba(98, 0, 238, 1)',
+            borderWidth: 1,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false }},
+          scales: {
+            y: { beginAtZero: true, ticks: { color: "white" }},
+            x: { ticks: { color: "white" }}
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
