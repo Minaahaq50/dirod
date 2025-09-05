@@ -23,6 +23,8 @@ th { background-color: #0072ff; color: white; }
 tr:hover { background-color: rgba(0, 197, 255, 0.2); }
 button.approve { background-color: #00f5c4; color: #000; }
 button.delete { background-color: #ff4f4f; color: #fff; margin-left: 5px; }
+button.edit { background-color: #ffc107; color: #000; margin-left: 5px; }
+button.add { background-color: #00ff7f; color: #000; margin-top:10px; }
 #status { text-align:center; margin-bottom:10px; color:#00f5c4; }
 #error { text-align:center; margin-bottom:10px; color:#ff4f4f; }
 </style>
@@ -41,6 +43,8 @@ button.delete { background-color: #ff4f4f; color: #fff; margin-left: 5px; }
 
 <p id="status"></p>
 <p id="error"></p>
+
+<button id="addRequestBtn" class="add" style="display:none;">إضافة طلب جديد</button>
 
 <table>
   <thead>
@@ -75,8 +79,9 @@ const requestsTable = document.getElementById("requestsTable");
 const statusEl = document.getElementById("status");
 const errorEl = document.getElementById("error");
 const loginFormDiv = document.getElementById("loginForm");
+const addRequestBtn = document.getElementById("addRequestBtn");
 
-// UID المسؤول (يمكن التحقق بعد تسجيل الدخول)
+// UID المسؤول
 const adminUid = "Se5eNLTKoqUGjeShmRJRHDiKogF3";
 
 // تسجيل الدخول للمسؤول
@@ -96,6 +101,7 @@ document.getElementById("adminLogin").addEventListener("submit", e=>{
       }
       statusEl.textContent = "✅ تم تسجيل الدخول كمسؤول.";
       loginFormDiv.style.display = "none";
+      addRequestBtn.style.display = "block";
       loadRequests();
     })
     .catch(err => {
@@ -125,24 +131,22 @@ function loadRequests(){
           <td>${new Date(data.timestamp).toLocaleString()}</td>
           <td>
             <button class="approve">موافقة</button>
+            <button class="edit">تعديل</button>
             <button class="delete">حذف</button>
           </td>
         `;
 
         // زر الموافقة
         row.querySelector(".approve").addEventListener("click", ()=>{
-          db.ref("approvedStudents/"+uid).set({
-            name:data.name,
-            phone:data.phone,
-            timestamp:data.timestamp
-          }).then(()=>{
-            db.ref("pendingStudents/"+uid).remove();
-            statusEl.textContent = `✅ تم الموافقة على ${data.name}`;
-            loadRequests();
-          }).catch(err=>{
-            errorEl.textContent = "❌ حدث خطأ أثناء الموافقة.";
-            console.error(err);
-          });
+          db.ref("approvedStudents/"+uid).set(data)
+            .then(()=> db.ref("pendingStudents/"+uid).remove())
+            .then(()=>{
+              statusEl.textContent = `✅ تم الموافقة على ${data.name}`;
+              loadRequests();
+            }).catch(err=>{
+              errorEl.textContent = "❌ حدث خطأ أثناء الموافقة.";
+              console.error(err);
+            });
         });
 
         // زر الحذف
@@ -157,6 +161,22 @@ function loadRequests(){
             });
         });
 
+        // زر التعديل
+        row.querySelector(".edit").addEventListener("click", ()=>{
+          const newName = prompt("الاسم الجديد:", data.name);
+          const newPhone = prompt("رقم الهاتف الجديد:", data.phone);
+          if(newName && newPhone){
+            db.ref("pendingStudents/"+uid).update({name:newName, phone:newPhone})
+              .then(()=>{
+                statusEl.textContent = `✅ تم تعديل ${newName}`;
+                loadRequests();
+              }).catch(err=>{
+                errorEl.textContent = "❌ حدث خطأ أثناء التعديل.";
+                console.error(err);
+              });
+          }
+        });
+
         requestsTable.appendChild(row);
       });
     })
@@ -165,6 +185,24 @@ function loadRequests(){
       console.error(err);
     });
 }
+
+// إضافة طلب جديد مباشرة من لوحة الإدارة
+addRequestBtn.addEventListener("click", ()=>{
+  const name = prompt("اسم الطالب الجديد:");
+  const phone = prompt("رقم الهاتف:");
+  if(name && phone){
+    const uid = db.ref("pendingStudents").push().key;
+    db.ref("pendingStudents/"+uid).set({
+      name, phone, timestamp: Date.now()
+    }).then(()=>{
+      statusEl.textContent = `✅ تم إضافة ${name} بنجاح`;
+      loadRequests();
+    }).catch(err=>{
+      errorEl.textContent = "❌ حدث خطأ أثناء إضافة الطلب.";
+      console.error(err);
+    });
+  }
+});
 </script>
 
 </body>
