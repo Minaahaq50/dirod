@@ -3,32 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>لوحة إدارة THE BEST</title>
+<title>لوحة الإدارة - THE BEST</title>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
 <style>
-body { font-family: 'Cairo', sans-serif; background: #141E30; color: white; padding: 20px; }
-h1 { text-align: center; color: #00f5c4; margin-bottom: 20px; }
-form { max-width: 400px; margin: 0 auto; text-align: center; }
-input { width: 100%; padding: 10px; margin: 8px 0; border-radius: 8px; border: none; }
-button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; margin-top: 5px; }
-button:hover { opacity: 0.9; }
-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-th, td { padding: 12px; border-bottom: 1px solid #444; text-align: center; }
-th { background-color: #0072ff; color: white; }
-tr:hover { background-color: rgba(0, 197, 255, 0.2); }
-button.approve { background-color: #00f5c4; color: #000; }
-button.delete { background-color: #ff4f4f; color: #fff; margin-left: 5px; }
-button.edit { background-color: #ffc107; color: #000; margin-left: 5px; }
-button.add { background-color: #00ff7f; color: #000; margin-top:10px; }
-#status { text-align:center; margin-bottom:10px; color:#00f5c4; }
-#error { text-align:center; margin-bottom:10px; color:#ff4f4f; }
+body { font-family:sans-serif; background:#111; color:white; padding:20px; }
+h1 { text-align:center; color:#00f5c4; }
+form { max-width:400px; margin:0 auto 20px auto; text-align:center; }
+input { width:100%; padding:10px; margin:8px 0; border-radius:6px; border:none; }
+button { padding:6px 12px; margin:2px; cursor:pointer; border:none; border-radius:5px; }
+.accept { background:#00f5c4; color:black; }
+.reject { background:#ff4f4f; color:white; }
+table { width:100%; border-collapse: collapse; margin-top:20px; }
+th, td { border:1px solid #444; padding:10px; text-align:center; }
+select { padding:5px; border-radius:5px; }
+#status { text-align:center; color:#00f5c4; margin-bottom:10px; }
+#error { text-align:center; color:#ff4f4f; margin-bottom:10px; }
 </style>
 </head>
 <body>
 
-<h1>لوحة إدارة الطلبات</h1>
+<h1>لوحة الإدارة - الموافقة على الطلاب</h1>
 
 <div id="loginForm">
   <form id="adminLogin">
@@ -41,19 +38,9 @@ button.add { background-color: #00ff7f; color: #000; margin-top:10px; }
 <p id="status"></p>
 <p id="error"></p>
 
-<button id="addRequestBtn" class="add" style="display:none;">إضافة طلب جديد</button>
-
-<table>
-  <thead>
-    <tr>
-      <th>الاسم</th>
-      <th>رقم الهاتف</th>
-      <th>الوقت</th>
-      <th>إجراءات</th>
-    </tr>
-  </thead>
-  <tbody id="requestsTable">
-  </tbody>
+<table id="requestsTable" style="display:none;">
+  <tr><th>الاسم</th><th>الهاتف</th><th>المدة</th><th>الإجراء</th></tr>
+  <tbody id="requests"></tbody>
 </table>
 
 <script>
@@ -70,21 +57,20 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const auth = firebase.auth();
 
-const requestsTable = document.getElementById("requestsTable");
+const adminUid = "Se5eNLTKoqUGjeShmRJRHDiKogF3";
+const requestsTableEl = document.getElementById("requestsTable");
+const requestsBody = document.getElementById("requests");
 const statusEl = document.getElementById("status");
 const errorEl = document.getElementById("error");
 const loginFormDiv = document.getElementById("loginForm");
-const addRequestBtn = document.getElementById("addRequestBtn");
 
-// UID المسؤول
-const adminUid = "Se5eNLTKoqUGjeShmRJRHDiKogF3";
-
+// تسجيل دخول المسؤول
 document.getElementById("adminLogin").addEventListener("submit", e=>{
   e.preventDefault();
-  const email = document.getElementById("adminEmail").value.trim();
-  const password = document.getElementById("adminPassword").value.trim();
   errorEl.textContent = "";
   statusEl.textContent = "جارٍ تسجيل الدخول...";
+  const email = document.getElementById("adminEmail").value.trim();
+  const password = document.getElementById("adminPassword").value.trim();
 
   auth.signInWithEmailAndPassword(email,password)
   .then(res=>{
@@ -95,7 +81,7 @@ document.getElementById("adminLogin").addEventListener("submit", e=>{
     }
     statusEl.textContent="✅ تم تسجيل الدخول كمسؤول.";
     loginFormDiv.style.display="none";
-    addRequestBtn.style.display="block";
+    requestsTableEl.style.display="table";
     loadRequests();
   })
   .catch(err=>{
@@ -104,53 +90,35 @@ document.getElementById("adminLogin").addEventListener("submit", e=>{
   });
 });
 
+// تحميل الطلبات
 function loadRequests(){
+  requestsBody.innerHTML="";
   db.ref("pendingStudents").once("value")
   .then(snapshot=>{
-    requestsTable.innerHTML="";
     if(!snapshot.exists()){
-      requestsTable.innerHTML="<tr><td colspan='4'>لا توجد طلبات حالياً.</td></tr>";
+      requestsBody.innerHTML="<tr><td colspan='4'>لا توجد طلبات حالياً.</td></tr>";
       return;
     }
-    snapshot.forEach(snap=>{
-      const data = snap.val();
-      const uid = snap.key;
-      const row = document.createElement("tr");
-      row.innerHTML=`
+    snapshot.forEach(child=>{
+      const key = child.key;
+      const data = child.val();
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
         <td>${data.name}</td>
         <td>${data.phone}</td>
-        <td>${new Date(data.timestamp).toLocaleString()}</td>
         <td>
-          <button class="approve">موافقة</button>
-          <button class="edit">تعديل</button>
-          <button class="delete">حذف</button>
+          <select id="duration_${key}">
+            <option value="3600000">ساعة</option>
+            <option value="86400000">يوم</option>
+            <option value="2592000000">شهر</option>
+          </select>
+        </td>
+        <td>
+          <button class="accept" onclick="accept('${key}')">قبول</button>
+          <button class="reject" onclick="reject('${key}')">رفض</button>
         </td>
       `;
-
-      row.querySelector(".approve").addEventListener("click", ()=>{
-        db.ref("approvedStudents/"+uid).set(data)
-        .then(()=> db.ref("pendingStudents/"+uid).remove())
-        .then(()=>{ statusEl.textContent=`✅ تم الموافقة على ${data.name}`; loadRequests(); })
-        .catch(err=>{ errorEl.textContent="❌ حدث خطأ أثناء الموافقة."; console.error(err); });
-      });
-
-      row.querySelector(".delete").addEventListener("click", ()=>{
-        db.ref("pendingStudents/"+uid).remove()
-        .then(()=>{ statusEl.textContent=`✅ تم حذف ${data.name}`; loadRequests(); })
-        .catch(err=>{ errorEl.textContent="❌ حدث خطأ أثناء الحذف."; console.error(err); });
-      });
-
-      row.querySelector(".edit").addEventListener("click", ()=>{
-        const newName = prompt("الاسم الجديد:", data.name);
-        const newPhone = prompt("رقم الهاتف الجديد:", data.phone);
-        if(newName && newPhone){
-          db.ref("pendingStudents/"+uid).update({name:newName, phone:newPhone})
-          .then(()=>{ statusEl.textContent=`✅ تم تعديل ${newName}`; loadRequests(); })
-          .catch(err=>{ errorEl.textContent="❌ حدث خطأ أثناء التعديل."; console.error(err); });
-        }
-      });
-
-      requestsTable.appendChild(row);
+      requestsBody.appendChild(tr);
     });
   })
   .catch(err=>{
@@ -159,17 +127,41 @@ function loadRequests(){
   });
 }
 
-// إضافة طلب جديد من لوحة الإدارة
-addRequestBtn.addEventListener("click", ()=>{
-  const name = prompt("اسم الطالب الجديد:");
-  const phone = prompt("رقم الهاتف:");
-  if(name && phone){
-    const uid = db.ref("pendingStudents").push().key;
-    db.ref("pendingStudents/"+uid).set({name, phone, timestamp:Date.now()})
-    .then(()=>{ statusEl.textContent=`✅ تم إضافة ${name} بنجاح`; loadRequests(); })
-    .catch(err=>{ errorEl.textContent="❌ حدث خطأ أثناء إضافة الطلب."; console.error(err); });
-  }
-});
+// قبول الطلب
+function accept(uid){
+  const duration = parseInt(document.getElementById("duration_" + uid).value);
+  db.ref("pendingStudents/" + uid).once("value").then(snap=>{
+    const data = snap.val();
+    const approvedAt = Date.now();
+    const expiry = approvedAt + duration;
+    db.ref("approvedStudents/" + uid).set({
+      name: data.name,
+      phone: data.phone,
+      approvedAt,
+      expiry
+    }).then(()=>{
+      db.ref("pendingStudents/" + uid).remove();
+      statusEl.textContent=`✅ تم الموافقة على ${data.name}`;
+      loadRequests();
+    }).catch(err=>{
+      errorEl.textContent="❌ حدث خطأ أثناء الموافقة.";
+      console.error(err);
+    });
+  });
+}
+
+// رفض الطلب
+function reject(uid){
+  db.ref("pendingStudents/" + uid).remove()
+  .then(()=>{
+    statusEl.textContent="✅ تم حذف الطلب.";
+    loadRequests();
+  })
+  .catch(err=>{
+    errorEl.textContent="❌ حدث خطأ أثناء حذف الطلب.";
+    console.error(err);
+  });
+}
 </script>
 </body>
 </html>
