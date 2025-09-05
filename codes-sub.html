@@ -4,16 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>لوحة إدارة THE BEST</title>
-
-<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-
 <style>
-body { font-family: 'Cairo', sans-serif; background: #141E30; color: white; margin: 0; padding: 20px; }
+body { font-family: 'Cairo', sans-serif; background: #141E30; color: white; padding: 20px; }
 h1 { text-align: center; color: #00f5c4; margin-bottom: 20px; }
-form { max-width: 400px; margin: 0 auto 20px auto; text-align: center; }
+form { max-width: 400px; margin: 0 auto; text-align: center; }
 input { width: 100%; padding: 10px; margin: 8px 0; border-radius: 8px; border: none; }
 button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; margin-top: 5px; }
 button:hover { opacity: 0.9; }
@@ -56,7 +53,6 @@ button.add { background-color: #00ff7f; color: #000; margin-top:10px; }
     </tr>
   </thead>
   <tbody id="requestsTable">
-    <!-- الطلبات ستظهر هنا -->
   </tbody>
 </table>
 
@@ -70,7 +66,6 @@ const firebaseConfig = {
   messagingSenderId: "523879269039",
   appId: "1:523879269039:web:634861aa34641bfebf8a5a"
 };
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const auth = firebase.auth();
@@ -84,7 +79,6 @@ const addRequestBtn = document.getElementById("addRequestBtn");
 // UID المسؤول
 const adminUid = "Se5eNLTKoqUGjeShmRJRHDiKogF3";
 
-// تسجيل الدخول للمسؤول
 document.getElementById("adminLogin").addEventListener("submit", e=>{
   e.preventDefault();
   const email = document.getElementById("adminEmail").value.trim();
@@ -92,118 +86,90 @@ document.getElementById("adminLogin").addEventListener("submit", e=>{
   errorEl.textContent = "";
   statusEl.textContent = "جارٍ تسجيل الدخول...";
 
-  auth.signInWithEmailAndPassword(email, password)
-    .then(res => {
-      if(res.user.uid !== adminUid){
-        errorEl.textContent = "❌ هذا الحساب ليس مسؤولاً.";
-        auth.signOut();
-        return;
-      }
-      statusEl.textContent = "✅ تم تسجيل الدخول كمسؤول.";
-      loginFormDiv.style.display = "none";
-      addRequestBtn.style.display = "block";
-      loadRequests();
-    })
-    .catch(err => {
-      errorEl.textContent = "❌ فشل تسجيل الدخول. تحقق من البريد وكلمة المرور.";
-      console.error(err);
-    });
+  auth.signInWithEmailAndPassword(email,password)
+  .then(res=>{
+    if(res.user.uid !== adminUid){
+      errorEl.textContent="❌ هذا الحساب ليس مسؤولاً.";
+      auth.signOut();
+      return;
+    }
+    statusEl.textContent="✅ تم تسجيل الدخول كمسؤول.";
+    loginFormDiv.style.display="none";
+    addRequestBtn.style.display="block";
+    loadRequests();
+  })
+  .catch(err=>{
+    errorEl.textContent="❌ فشل تسجيل الدخول. تحقق من البريد وكلمة المرور.";
+    console.error(err);
+  });
 });
 
-// تحميل الطلبات
 function loadRequests(){
   db.ref("pendingStudents").once("value")
-    .then(snapshot => {
-      requestsTable.innerHTML = "";
-      if(!snapshot.exists()){
-        requestsTable.innerHTML = "<tr><td colspan='4'>لا توجد طلبات حالياً.</td></tr>";
-        return;
-      }
+  .then(snapshot=>{
+    requestsTable.innerHTML="";
+    if(!snapshot.exists()){
+      requestsTable.innerHTML="<tr><td colspan='4'>لا توجد طلبات حالياً.</td></tr>";
+      return;
+    }
+    snapshot.forEach(snap=>{
+      const data = snap.val();
+      const uid = snap.key;
+      const row = document.createElement("tr");
+      row.innerHTML=`
+        <td>${data.name}</td>
+        <td>${data.phone}</td>
+        <td>${new Date(data.timestamp).toLocaleString()}</td>
+        <td>
+          <button class="approve">موافقة</button>
+          <button class="edit">تعديل</button>
+          <button class="delete">حذف</button>
+        </td>
+      `;
 
-      snapshot.forEach(snap => {
-        const data = snap.val();
-        const uid = snap.key;
-        const row = document.createElement("tr");
-
-        row.innerHTML = `
-          <td>${data.name}</td>
-          <td>${data.phone}</td>
-          <td>${new Date(data.timestamp).toLocaleString()}</td>
-          <td>
-            <button class="approve">موافقة</button>
-            <button class="edit">تعديل</button>
-            <button class="delete">حذف</button>
-          </td>
-        `;
-
-        // زر الموافقة
-        row.querySelector(".approve").addEventListener("click", ()=>{
-          db.ref("approvedStudents/"+uid).set(data)
-            .then(()=> db.ref("pendingStudents/"+uid).remove())
-            .then(()=>{
-              statusEl.textContent = `✅ تم الموافقة على ${data.name}`;
-              loadRequests();
-            }).catch(err=>{
-              errorEl.textContent = "❌ حدث خطأ أثناء الموافقة.";
-              console.error(err);
-            });
-        });
-
-        // زر الحذف
-        row.querySelector(".delete").addEventListener("click", ()=>{
-          db.ref("pendingStudents/"+uid).remove()
-            .then(()=>{
-              statusEl.textContent = `✅ تم حذف ${data.name}`;
-              loadRequests();
-            }).catch(err=>{
-              errorEl.textContent = "❌ حدث خطأ أثناء الحذف.";
-              console.error(err);
-            });
-        });
-
-        // زر التعديل
-        row.querySelector(".edit").addEventListener("click", ()=>{
-          const newName = prompt("الاسم الجديد:", data.name);
-          const newPhone = prompt("رقم الهاتف الجديد:", data.phone);
-          if(newName && newPhone){
-            db.ref("pendingStudents/"+uid).update({name:newName, phone:newPhone})
-              .then(()=>{
-                statusEl.textContent = `✅ تم تعديل ${newName}`;
-                loadRequests();
-              }).catch(err=>{
-                errorEl.textContent = "❌ حدث خطأ أثناء التعديل.";
-                console.error(err);
-              });
-          }
-        });
-
-        requestsTable.appendChild(row);
+      row.querySelector(".approve").addEventListener("click", ()=>{
+        db.ref("approvedStudents/"+uid).set(data)
+        .then(()=> db.ref("pendingStudents/"+uid).remove())
+        .then(()=>{ statusEl.textContent=`✅ تم الموافقة على ${data.name}`; loadRequests(); })
+        .catch(err=>{ errorEl.textContent="❌ حدث خطأ أثناء الموافقة."; console.error(err); });
       });
-    })
-    .catch(err=>{
-      errorEl.textContent = "❌ حدث خطأ أثناء تحميل الطلبات.";
-      console.error(err);
+
+      row.querySelector(".delete").addEventListener("click", ()=>{
+        db.ref("pendingStudents/"+uid).remove()
+        .then(()=>{ statusEl.textContent=`✅ تم حذف ${data.name}`; loadRequests(); })
+        .catch(err=>{ errorEl.textContent="❌ حدث خطأ أثناء الحذف."; console.error(err); });
+      });
+
+      row.querySelector(".edit").addEventListener("click", ()=>{
+        const newName = prompt("الاسم الجديد:", data.name);
+        const newPhone = prompt("رقم الهاتف الجديد:", data.phone);
+        if(newName && newPhone){
+          db.ref("pendingStudents/"+uid).update({name:newName, phone:newPhone})
+          .then(()=>{ statusEl.textContent=`✅ تم تعديل ${newName}`; loadRequests(); })
+          .catch(err=>{ errorEl.textContent="❌ حدث خطأ أثناء التعديل."; console.error(err); });
+        }
+      });
+
+      requestsTable.appendChild(row);
     });
+  })
+  .catch(err=>{
+    errorEl.textContent="❌ حدث خطأ أثناء تحميل الطلبات.";
+    console.error(err);
+  });
 }
 
-// إضافة طلب جديد مباشرة من لوحة الإدارة
+// إضافة طلب جديد من لوحة الإدارة
 addRequestBtn.addEventListener("click", ()=>{
   const name = prompt("اسم الطالب الجديد:");
   const phone = prompt("رقم الهاتف:");
   if(name && phone){
     const uid = db.ref("pendingStudents").push().key;
-    db.ref("pendingStudents/"+uid).set({
-      name, phone, timestamp: Date.now()
-    }).then(()=>{
-      statusEl.textContent = `✅ تم إضافة ${name} بنجاح`;
-      loadRequests();
-    }).catch(err=>{
-      errorEl.textContent = "❌ حدث خطأ أثناء إضافة الطلب.";
-      console.error(err);
-    });
+    db.ref("pendingStudents/"+uid).set({name, phone, timestamp:Date.now()})
+    .then(()=>{ statusEl.textContent=`✅ تم إضافة ${name} بنجاح`; loadRequests(); })
+    .catch(err=>{ errorEl.textContent="❌ حدث خطأ أثناء إضافة الطلب."; console.error(err); });
   }
 });
 </script>
-
 </body>
 </html>
