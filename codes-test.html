@@ -1,194 +1,208 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <title>لوحة توليد الأكواد</title>
-  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
-  <style>
-    body {
-      font-family: 'Cairo', sans-serif;
-      background-color: #121212;
-      color: white;
-      padding: 20px;
-    }
-    h1 {
-      text-align: center;
-      color: #00ffcc;
-    }
-    .btn {
-      background-color: #00ffcc;
-      color: #000;
-      padding: 10px 20px;
-      border: none;
-      cursor: pointer;
-      font-weight: bold;
-      border-radius: 5px;
-      margin: 10px 0;
-    }
-    table {
-      width: 100%;
-      margin-top: 20px;
-      border-collapse: collapse;
-    }
-    th, td {
-      border: 1px solid #555;
-      padding: 10px;
-      text-align: center;
-    }
-    .restart-btn {
-      background-color: #ff9900;
-      color: white;
-      border: none;
-      padding: 5px 10px;
-      cursor: pointer;
-      border-radius: 5px;
-    }
-    .delete-btn {
-      background-color: red;
-      color: white;
-      border: none;
-      padding: 5px 10px;
-      cursor: pointer;
-      border-radius: 5px;
-    }
-    .copy-btn {
-      background-color: #00ccff;
-      color: #000;
-      border: none;
-      padding: 3px 7px;
-      cursor: pointer;
-      border-radius: 5px;
-      margin-left: 5px;
-      font-size: 12px;
-    }
-    input {
-      padding: 5px;
-      margin-right: 10px;
-      border-radius: 5px;
-      border: none;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة الإدارة - THE BEST</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+<style>
+body { font-family:sans-serif; background:#111; color:white; padding:20px; }
+h1 { text-align:center; color:#00f5c4; }
+form { max-width:400px; margin:0 auto 20px auto; text-align:center; }
+input { width:100%; padding:10px; margin:8px 0; border-radius:6px; border:none; }
+button { padding:6px 12px; margin:2px; cursor:pointer; border:none; border-radius:5px; }
+.accept { background:#00f5c4; color:black; }
+.trial { background:#ffb347; color:black; }
+.reject { background:#ff4f4f; color:white; }
+table { width:100%; border-collapse: collapse; margin-top:20px; }
+th, td { border:1px solid #444; padding:10px; text-align:center; }
+#status { text-align:center; color:#00f5c4; margin-bottom:10px; }
+#error { text-align:center; color:#ff4f4f; margin-bottom:10px; }
+</style>
 </head>
 <body>
-  <h1>لوحة توليد أكواد الطلاب 🔐</h1>
 
-  <div>
-    <input type="number" id="minutesInput" placeholder="عدد الدقائق" min="1">
-    <button class="btn" onclick="generateCode()">توليد كود جديد</button>
-  </div>
+<h1>لوحة الإدارة - الموافقة على الطلاب</h1>
 
-  <table id="codesTable">
-    <thead>
-      <tr>
-        <th>الكود</th>
-        <th>Code ID</th>
-        <th>تاريخ الإنشاء</th>
-        <th>تاريخ الانتهاء</th>
-        <th>حالة الكود</th>
-        <th>إعادة تفعيل</th>
-        <th>حذف</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+<div id="loginForm">
+  <form id="adminLogin">
+    <input type="email" id="adminEmail" placeholder="البريد الإلكتروني">
+    <input type="password" id="adminPassword" placeholder="كلمة المرور">
+    <button type="submit">تسجيل الدخول</button>
+  </form>
+</div>
 
-  <script>
-    const firebaseConfig = {
-      databaseURL: "https://alamer-526ff-default-rtdb.firebaseio.com/"
-    };
+<p id="status"></p>
+<p id="error"></p>
 
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    const codesRef = db.ref("codes");
+<table id="requestsTable" style="display:none;">
+  <tr><th>الاسم</th><th>الهاتف</th><th>أيام الاشتراك</th><th>دقايق التجربة</th><th>الإجراء</th></tr>
+  <tbody id="requests"></tbody>
+</table>
 
-    function generateCode() {
-      const minutes = parseInt(document.getElementById("minutesInput").value);
-      if (isNaN(minutes) || minutes <= 0) {
-        alert("يرجى إدخال عدد دقائق صالح.");
-        return;
-      }
-      const code = generateRandomCode();
-      const now = Date.now();
-      const expire = now + (minutes * 60 * 1000); // بعد عدد الدقائق المحدد
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCdhj73cKJc2J2_tDHw2-89EemZx-EGMJQ",
+  authDomain: "alamer-526ff.firebaseapp.com",
+  databaseURL: "https://alamer-526ff-default-rtdb.firebaseio.com",
+  projectId: "alamer-526ff",
+  storageBucket: "alamer-526ff.appspot.com",
+  messagingSenderId: "523879269039",
+  appId: "1:523879269039:web:634861aa34641bfebf8a5a"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const auth = firebase.auth();
 
-      codesRef.push({
-        code: code,
-        timestamp: now,
-        expire: expire,
-        usedByDeviceId: null
-      });
+// uid الأدمن
+const adminUid = "Se5eNLTKoqUGjeShmRJRHDiKogF3";
+
+const requestsTableEl = document.getElementById("requestsTable");
+const requestsBody = document.getElementById("requests");
+const statusEl = document.getElementById("status");
+const errorEl = document.getElementById("error");
+const loginFormDiv = document.getElementById("loginForm");
+
+// تسجيل دخول الأدمن
+document.getElementById("adminLogin").addEventListener("submit", e=>{
+  e.preventDefault();
+  errorEl.textContent = "";
+  statusEl.textContent = "جارٍ تسجيل الدخول...";
+  const email = document.getElementById("adminEmail").value.trim();
+  const password = document.getElementById("adminPassword").value.trim();
+
+  auth.signInWithEmailAndPassword(email,password)
+  .then(res=>{
+    if(res.user.uid !== adminUid){
+      errorEl.textContent="❌ هذا الحساب ليس مسؤولاً.";
+      auth.signOut();
+      return;
     }
+    statusEl.textContent="✅ تم تسجيل الدخول كمسؤول.";
+    loginFormDiv.style.display="none";
+    requestsTableEl.style.display="table";
+    loadRequests();
+  })
+  .catch(err=>{
+    errorEl.textContent="❌ فشل تسجيل الدخول. تحقق من البريد وكلمة المرور.";
+    console.error(err);
+  });
+});
 
-    function generateRandomCode(length = 10) {
-      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-      let result = "";
-      for (let i = 0; i < length; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return result;
+// تحميل الطلبات
+function loadRequests(){
+  requestsBody.innerHTML="";
+  db.ref("pendingStudents").once("value")
+  .then(snapshot=>{
+    if(!snapshot.exists()){
+      requestsBody.innerHTML="<tr><td colspan='5'>لا توجد طلبات حالياً.</td></tr>";
+      return;
     }
-
-    function formatDate(ms) {
-      const date = new Date(ms);
-      return date.toLocaleDateString("ar-EG") + " - " + date.toLocaleTimeString("ar-EG");
-    }
-
-    function restartCode(key) {
-      const minutes = parseInt(prompt("أدخل عدد الدقائق الجديدة:", "1"));
-      if (isNaN(minutes) || minutes <= 0) {
-        alert("عدد دقائق غير صالح.");
-        return;
-      }
-      const now = Date.now();
-      const expire = now + (minutes * 60 * 1000);
-      codesRef.child(key).update({
-        timestamp: now,
-        expire: expire,
-        usedByDeviceId: null
-      });
-    }
-
-    function deleteCode(key) {
-      if (confirm("هل تريد حذف هذا الكود نهائياً؟")) {
-        codesRef.child(key).remove();
-      }
-    }
-
-    function copyToClipboard(text) {
-      navigator.clipboard.writeText(text).then(() => {
-        alert("تم نسخ: " + text);
-      });
-    }
-
-    // عرض الأكواد
-    codesRef.on("value", snapshot => {
-      const tbody = document.querySelector("#codesTable tbody");
-      tbody.innerHTML = "";
-      snapshot.forEach(child => {
-        const data = child.val();
-        const tr = document.createElement("tr");
-
-        let status = "غير مستخدم";
-        if (data.deviceId) {
-          status = "مفعل ✅";
-        }
-
-        tr.innerHTML = `
-          <td>${data.code}</td>
-          <td>
-            ${child.key}
-            <button class="copy-btn" onclick="copyToClipboard('${child.key}')">📋</button>
-          </td>
-          <td>${formatDate(data.timestamp)}</td>
-          <td>${formatDate(data.expire)}</td>
-          <td>${status}</td>
-          <td><button class="restart-btn" onclick="restartCode('${child.key}')">🔄</button></td>
-          <td><button class="delete-btn" onclick="deleteCode('${child.key}')">🗑</button></td>
-        `;
-        tbody.appendChild(tr);
-      });
+    snapshot.forEach(child=>{
+      const key = child.key; 
+      const data = child.val();
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${data.name}</td>
+        <td>${data.phone}</td>
+        <td><input type="number" id="days_${key}" placeholder="أيام" style="width:70px;"></td>
+        <td><input type="number" id="minutes_${key}" placeholder="دقايق" style="width:70px;"></td>
+        <td>
+          <button class="accept" onclick="accept('${key}')">اشتراك</button>
+          <button class="trial" onclick="acceptTrial('${key}')">تجربة</button>
+          <button class="reject" onclick="reject('${key}')">رفض</button>
+        </td>
+      `;
+      requestsBody.appendChild(tr);
     });
-  </script>
+  })
+  .catch(err=>{
+    errorEl.textContent="❌ حدث خطأ أثناء تحميل الطلبات.";
+    console.error(err);
+  });
+}
+
+// قبول كاشتراك (بالأيام)
+function accept(uid){
+  const days = parseInt(document.getElementById("days_" + uid).value) || 0;
+  if(days <= 0){
+    errorEl.textContent = "❌ برجاء إدخال عدد أيام صحيح.";
+    return;
+  }
+  const duration = days * 24 * 60 * 60 * 1000;
+
+  db.ref("pendingStudents/" + uid).once("value").then(snap=>{
+    const data = snap.val();
+    if(!data){
+      errorEl.textContent = "❌ لم يتم العثور على بيانات الطالب.";
+      return;
+    }
+    const approvedAt = Date.now();
+    const expiry = approvedAt + duration;
+
+    db.ref("approvedStudents/" + uid).set({
+      name: data.name,
+      phone: data.phone,
+      deviceId: uid,
+      approvedAt,
+      expiry,
+      trial: false
+    }).then(()=>{
+      db.ref("pendingStudents/" + uid).remove();
+      statusEl.textContent=`✅ تم الموافقة على ${data.name} لاشتراك ${days} يوم`;
+      loadRequests();
+    });
+  });
+}
+
+// قبول كتجربة (بالدقايق)
+function acceptTrial(uid){
+  const minutes = parseInt(document.getElementById("minutes_" + uid).value) || 0;
+  if(minutes <= 0){
+    errorEl.textContent = "❌ برجاء إدخال عدد دقائق صحيح.";
+    return;
+  }
+  const duration = minutes * 60 * 1000;
+
+  db.ref("pendingStudents/" + uid).once("value").then(snap=>{
+    const data = snap.val();
+    if(!data){
+      errorEl.textContent = "❌ لم يتم العثور على بيانات الطالب.";
+      return;
+    }
+    const approvedAt = Date.now();
+    const expiry = approvedAt + duration;
+
+    db.ref("approvedStudents/" + uid).set({
+      name: data.name,
+      phone: data.phone,
+      deviceId: uid,
+      approvedAt,
+      expiry,
+      trial: true
+    }).then(()=>{
+      db.ref("pendingStudents/" + uid).remove();
+      statusEl.textContent=`✅ تم إعطاء ${data.name} تجربة ${minutes} دقيقة`;
+      loadRequests();
+    });
+  });
+}
+
+// رفض الطلب
+function reject(uid){
+  db.ref("pendingStudents/" + uid).remove()
+  .then(()=>{
+    statusEl.textContent="✅ تم حذف الطلب.";
+    loadRequests();
+  })
+  .catch(err=>{
+    errorEl.textContent="❌ حدث خطأ أثناء حذف الطلب.";
+    console.error(err);
+  });
+}
+</script>
 </body>
 </html>
