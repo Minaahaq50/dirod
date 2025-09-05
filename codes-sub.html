@@ -13,14 +13,16 @@
 <style>
 body { font-family: 'Cairo', sans-serif; background: #141E30; color: white; margin: 0; padding: 20px; }
 h1 { text-align: center; color: #00f5c4; margin-bottom: 20px; }
-table { width: 100%; border-collapse: collapse; }
+form { max-width: 400px; margin: 0 auto 20px auto; text-align: center; }
+input { width: 100%; padding: 10px; margin: 8px 0; border-radius: 8px; border: none; }
+button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; margin-top: 5px; }
+button:hover { opacity: 0.9; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
 th, td { padding: 12px; border-bottom: 1px solid #444; text-align: center; }
 th { background-color: #0072ff; color: white; }
 tr:hover { background-color: rgba(0, 197, 255, 0.2); }
-button { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; }
 button.approve { background-color: #00f5c4; color: #000; }
 button.delete { background-color: #ff4f4f; color: #fff; margin-left: 5px; }
-button:hover { transform: scale(1.05); }
 #status { text-align:center; margin-bottom:10px; color:#00f5c4; }
 #error { text-align:center; margin-bottom:10px; color:#ff4f4f; }
 </style>
@@ -28,6 +30,15 @@ button:hover { transform: scale(1.05); }
 <body>
 
 <h1>لوحة إدارة الطلبات</h1>
+
+<div id="loginForm">
+  <form id="adminLogin">
+    <input type="email" id="adminEmail" placeholder="البريد الإلكتروني">
+    <input type="password" id="adminPassword" placeholder="كلمة المرور">
+    <button type="submit">تسجيل الدخول</button>
+  </form>
+</div>
+
 <p id="status"></p>
 <p id="error"></p>
 
@@ -63,23 +74,34 @@ const auth = firebase.auth();
 const requestsTable = document.getElementById("requestsTable");
 const statusEl = document.getElementById("status");
 const errorEl = document.getElementById("error");
+const loginFormDiv = document.getElementById("loginForm");
 
-// UID المسؤول
+// UID المسؤول (يمكن التحقق بعد تسجيل الدخول)
 const adminUid = "Se5eNLTKoqUGjeShmRJRHDiKogF3";
 
-// تسجيل الدخول المجهول للوحة الإدارة
-auth.signInAnonymously()
-.then(res => {
-  if(res.user.uid !== adminUid){
-    errorEl.textContent = "❌ ليس لديك صلاحية الوصول للوحة الإدارة.";
-    return;
-  }
-  statusEl.textContent = "✅ تم تسجيل الدخول كمسؤول.";
-  loadRequests();
-})
-.catch(err => {
-  errorEl.textContent = "❌ حدث خطأ أثناء تسجيل الدخول.";
-  console.error(err);
+// تسجيل الدخول للمسؤول
+document.getElementById("adminLogin").addEventListener("submit", e=>{
+  e.preventDefault();
+  const email = document.getElementById("adminEmail").value.trim();
+  const password = document.getElementById("adminPassword").value.trim();
+  errorEl.textContent = "";
+  statusEl.textContent = "جارٍ تسجيل الدخول...";
+
+  auth.signInWithEmailAndPassword(email, password)
+    .then(res => {
+      if(res.user.uid !== adminUid){
+        errorEl.textContent = "❌ هذا الحساب ليس مسؤولاً.";
+        auth.signOut();
+        return;
+      }
+      statusEl.textContent = "✅ تم تسجيل الدخول كمسؤول.";
+      loginFormDiv.style.display = "none";
+      loadRequests();
+    })
+    .catch(err => {
+      errorEl.textContent = "❌ فشل تسجيل الدخول. تحقق من البريد وكلمة المرور.";
+      console.error(err);
+    });
 });
 
 // تحميل الطلبات
@@ -147,4 +169,3 @@ function loadRequests(){
 
 </body>
 </html>
-
