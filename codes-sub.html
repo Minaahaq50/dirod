@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>لوحة الإدارة - THE BEST</title>
+<title>لوحة الإدارة - الطلاب الموافق عليهم</title>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -11,26 +11,25 @@
 <style>
 body { font-family:sans-serif; background:#111; color:white; padding:20px; }
 h1 { text-align:center; color:#00f5c4; }
-form { max-width:400px; margin:0 auto 20px auto; text-align:center; }
+form { max-width:400px; margin:0 auto; text-align:center; }
 input { width:100%; padding:10px; margin:8px 0; border-radius:6px; border:none; }
-button { padding:6px 12px; margin:2px; cursor:pointer; border:none; border-radius:5px; }
-.accept { background:#00f5c4; color:black; }
-.reject { background:#ff4f4f; color:white; }
-table { width:100%; border-collapse: collapse; margin-top:20px; }
-th, td { border:1px solid #444; padding:10px; text-align:center; }
-select { padding:5px; border-radius:5px; }
-#status { text-align:center; color:#00f5c4; margin-bottom:10px; }
-#error { text-align:center; color:#ff4f4f; margin-bottom:10px; }
+button { padding:10px 20px; margin:8px; cursor:pointer; border:none; border-radius:5px; background:#00f5c4; color:#111; }
+.delete { background:#ff4f4f; color:white; }
+#studentsTable { width:100%; border-collapse: collapse; margin-top:20px; background:#222; display:none; }
+th, td { border:1px solid #444; padding:10px; text-align:center; font-size:14px; }
+#status { text-align:center; color:#00f5c4; margin:10px; }
+#error { text-align:center; color:#ff4f4f; margin:10px; }
 </style>
 </head>
 <body>
 
-<h1>لوحة الإدارة - الموافقة على الطلاب</h1>
+<h1>لوحة الإدارة</h1>
 
-<div id="loginForm">
+<!-- فورم تسجيل الدخول -->
+<div id="loginDiv">
   <form id="adminLogin">
-    <input type="email" id="adminEmail" placeholder="البريد الإلكتروني">
-    <input type="password" id="adminPassword" placeholder="كلمة المرور">
+    <input type="email" id="adminEmail" placeholder="البريد الإلكتروني" required>
+    <input type="password" id="adminPassword" placeholder="كلمة المرور" required>
     <button type="submit">تسجيل الدخول</button>
   </form>
 </div>
@@ -38,9 +37,17 @@ select { padding:5px; border-radius:5px; }
 <p id="status"></p>
 <p id="error"></p>
 
-<table id="requestsTable" style="display:none;">
-  <tr><th>الاسم</th><th>الهاتف</th><th>المدة</th><th>الإجراء</th></tr>
-  <tbody id="requests"></tbody>
+<table id="studentsTable">
+  <thead>
+    <tr>
+      <th>الاسم</th>
+      <th>الهاتف</th>
+      <th>Device ID</th>
+      <th>موعد الانتهاء</th>
+      <th>إجراء</th>
+    </tr>
+  </thead>
+  <tbody id="studentsBody"></tbody>
 </table>
 
 <script>
@@ -57,119 +64,87 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const auth = firebase.auth();
 
-// uid بتاع الأدمن
-const adminUid = "Se5eNLTKoqUGjeShmRJRHDiKogF3";
-
-const requestsTableEl = document.getElementById("requestsTable");
-const requestsBody = document.getElementById("requests");
+const studentsBody = document.getElementById("studentsBody");
 const statusEl = document.getElementById("status");
 const errorEl = document.getElementById("error");
-const loginFormDiv = document.getElementById("loginForm");
+const tableEl = document.getElementById("studentsTable");
+const loginDiv = document.getElementById("loginDiv");
 
-// تسجيل دخول المسؤول
+// UID الخاص بالأدمن (من Firebase Auth)
+const adminUid = "Se5eNLTKoqUGjeShmRJRHDiKogF3";
+
+// تسجيل دخول الأدمن
 document.getElementById("adminLogin").addEventListener("submit", e=>{
   e.preventDefault();
-  errorEl.textContent = "";
-  statusEl.textContent = "جارٍ تسجيل الدخول...";
+  errorEl.textContent="";
+  statusEl.textContent="جارٍ تسجيل الدخول...";
+
   const email = document.getElementById("adminEmail").value.trim();
   const password = document.getElementById("adminPassword").value.trim();
 
   auth.signInWithEmailAndPassword(email,password)
-  .then(res=>{
-    if(res.user.uid !== adminUid){
-      errorEl.textContent="❌ هذا الحساب ليس مسؤولاً.";
-      auth.signOut();
-      return;
-    }
-    statusEl.textContent="✅ تم تسجيل الدخول كمسؤول.";
-    loginFormDiv.style.display="none";
-    requestsTableEl.style.display="table";
-    loadRequests();
-  })
-  .catch(err=>{
-    errorEl.textContent="❌ فشل تسجيل الدخول. تحقق من البريد وكلمة المرور.";
-    console.error(err);
-  });
-});
-
-// تحميل الطلبات
-function loadRequests(){
-  requestsBody.innerHTML="";
-  db.ref("pendingStudents").once("value")
-  .then(snapshot=>{
-    if(!snapshot.exists()){
-      requestsBody.innerHTML="<tr><td colspan='4'>لا توجد طلبات حالياً.</td></tr>";
-      return;
-    }
-    snapshot.forEach(child=>{
-      const key = child.key; // uid
-      const data = child.val();
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${data.name}</td>
-        <td>${data.phone}</td>
-        <td>
-          <select id="duration_${key}">
-            <option value="3600000">ساعة</option>
-            <option value="86400000">يوم</option>
-            <option value="2592000000">شهر</option>
-          </select>
-        </td>
-        <td>
-          <button class="accept" onclick="accept('${key}')">قبول</button>
-          <button class="reject" onclick="reject('${key}')">رفض</button>
-        </td>
-      `;
-      requestsBody.appendChild(tr);
-    });
-  })
-  .catch(err=>{
-    errorEl.textContent="❌ حدث خطأ أثناء تحميل الطلبات.";
-    console.error(err);
-  });
-}
-
-// قبول الطلب (مع تخزين deviceId)
-function accept(uid){
-  const duration = parseInt(document.getElementById("duration_" + uid).value);
-  db.ref("pendingStudents/" + uid).once("value").then(snap=>{
-    const data = snap.val();
-    if(!data){
-      errorEl.textContent = "❌ لم يتم العثور على بيانات الطالب.";
-      return;
-    }
-    const approvedAt = Date.now();
-    const expiry = approvedAt + duration;
-
-    // تخزين البيانات + ربط الـ deviceId بنفس الـ uid
-    db.ref("approvedStudents/" + uid).set({
-      name: data.name,
-      phone: data.phone,
-      deviceId: uid,
-      approvedAt,
-      expiry
-    }).then(()=>{
-      db.ref("pendingStudents/" + uid).remove();
-      statusEl.textContent=`✅ تم الموافقة على ${data.name}`;
-      loadRequests();
-    }).catch(err=>{
-      errorEl.textContent="❌ حدث خطأ أثناء الموافقة.";
+    .then(res=>{
+      if(res.user.uid !== adminUid){
+        errorEl.textContent="❌ هذا الحساب ليس مسؤولاً.";
+        statusEl.textContent="";
+        auth.signOut();
+        return;
+      }
+      statusEl.textContent="✅ تم تسجيل الدخول كمسؤول.";
+      loginDiv.style.display="none";
+      tableEl.style.display="table";
+      loadStudents();
+    })
+    .catch(err=>{
+      errorEl.textContent="❌ فشل تسجيل الدخول. تحقق من البريد وكلمة المرور.";
       console.error(err);
     });
-  });
+});
+
+// تحميل الطلاب الموافق عليهم
+function loadStudents(){
+  studentsBody.innerHTML="";
+  db.ref("approvedStudents").once("value")
+    .then(snapshot=>{
+      if(!snapshot.exists()){
+        studentsBody.innerHTML="<tr><td colspan='5'>لا يوجد طلاب.</td></tr>";
+        return;
+      }
+      snapshot.forEach(child=>{
+        const uid = child.key;
+        const data = child.val();
+        const expiryDate = data.expiry ? new Date(data.expiry).toLocaleString("ar-EG") : "غير محدد";
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${data.name || "-"}</td>
+          <td>${data.phone || "-"}</td>
+          <td>${data.deviceId || "-"}</td>
+          <td>${expiryDate}</td>
+          <td><button class="delete" onclick="deleteStudent('${uid}','${data.name || ''}')">حذف</button></td>
+        `;
+        studentsBody.appendChild(tr);
+      });
+    })
+    .catch(err=>{
+      errorEl.textContent="❌ حدث خطأ أثناء تحميل البيانات.";
+      console.error(err);
+    });
 }
 
-// رفض الطلب
-function reject(uid){
-  db.ref("pendingStudents/" + uid).remove()
-  .then(()=>{
-    statusEl.textContent="✅ تم حذف الطلب.";
-    loadRequests();
-  })
-  .catch(err=>{
-    errorEl.textContent="❌ حدث خطأ أثناء حذف الطلب.";
-    console.error(err);
-  });
+// حذف طالب
+function deleteStudent(uid,name){
+  if(confirm(`هل أنت متأكد من حذف ${name || 'هذا الطالب'}؟`)){
+    db.ref("approvedStudents/"+uid).remove()
+      .then(()=>{
+        statusEl.textContent=`✅ تم حذف ${name || "الطالب"} بنجاح.`;
+        loadStudents();
+      })
+      .catch(err=>{
+        errorEl.textContent="❌ حدث خطأ أثناء الحذف.";
+        console.error(err);
+      });
+  }
 }
 </script>
 </body>
