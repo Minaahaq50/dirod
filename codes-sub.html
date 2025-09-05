@@ -57,7 +57,9 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const auth = firebase.auth();
 
+// uid بتاع الأدمن
 const adminUid = "Se5eNLTKoqUGjeShmRJRHDiKogF3";
+
 const requestsTableEl = document.getElementById("requestsTable");
 const requestsBody = document.getElementById("requests");
 const statusEl = document.getElementById("status");
@@ -100,7 +102,7 @@ function loadRequests(){
       return;
     }
     snapshot.forEach(child=>{
-      const key = child.key;
+      const key = child.key; // uid
       const data = child.val();
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -127,16 +129,23 @@ function loadRequests(){
   });
 }
 
-// قبول الطلب
+// قبول الطلب (مع تخزين deviceId)
 function accept(uid){
   const duration = parseInt(document.getElementById("duration_" + uid).value);
   db.ref("pendingStudents/" + uid).once("value").then(snap=>{
     const data = snap.val();
+    if(!data){
+      errorEl.textContent = "❌ لم يتم العثور على بيانات الطالب.";
+      return;
+    }
     const approvedAt = Date.now();
     const expiry = approvedAt + duration;
+
+    // تخزين البيانات + ربط الـ deviceId بنفس الـ uid
     db.ref("approvedStudents/" + uid).set({
       name: data.name,
       phone: data.phone,
+      deviceId: uid,
       approvedAt,
       expiry
     }).then(()=>{
