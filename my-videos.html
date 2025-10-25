@@ -1,77 +1,198 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <title>مولد روابط يوتيوب ملء الشاشة</title>
-  <style>
-    body { 
-      font-family: Tahoma, Arial, sans-serif; 
-      background:#121212; color:#fff; text-align:center; padding:40px;
-    }
-    input, button {
-      padding:10px; margin:5px; border-radius:8px; border:0;
-    }
-    input { width:70%; }
-    button { background:#2d6cdf; color:#fff; font-weight:bold; cursor:pointer; }
-    #output { margin-top:20px; font-size:14px; word-wrap:break-word; }
-    #copyBtn { margin-top:10px; display:none; }
-  </style>
+<meta charset="UTF-8">
+<title>🎓 تعديل المحاضرات في Firebase</title>
+<style>
+body {
+  background: #121212; color: #fff; font-family: 'Cairo', sans-serif;
+  text-align: center; padding: 20px;
+}
+select, button {
+  padding: 8px 12px; border-radius: 6px; border: none; font-size: 15px;
+}
+select { width: 200px; margin: 5px; background: #222; color: #fff; }
+button {
+  background: #f36; color: #fff; cursor: pointer;
+}
+button:hover { background: #ff4d4d; }
+
+table {
+  width: 95%; margin: 20px auto; border-collapse: collapse;
+}
+th, td {
+  border: 1px solid #444; padding: 8px;
+}
+th { background: #222; color: #ffd700; }
+td input {
+  width: 90%; padding: 6px; border-radius: 5px; border: none;
+  background: #222; color: #fff;
+}
+#log {
+  margin-top: 20px; text-align: left; max-width: 700px; margin-inline: auto;
+  background: #1a1a1a; padding: 15px; border-radius: 10px; white-space: pre-wrap;
+}
+</style>
 </head>
 <body>
-  <h2>🎬 تحويل لينك يوتيوب → مشاهدة ملء الشاشة</h2>
-  <input type="text" id="ytUrl" placeholder="ألصق لينك اليوتيوب هنا">
-  <button onclick="convert()">تحويل</button>
-  
-  <div id="output"></div>
-  <button id="copyBtn" onclick="copyLink()">📋 نسخ اللينك</button>
 
-  <script>
-    let finalLink = "";
+<h2>🎓 تعديل المحاضرات في Firebase</h2>
 
-    function toSeconds(t){
-      if(!t) return 0;
-      if(/^\d+$/.test(t)) return parseInt(t,10);
-      let s=0; let m=t.match(/(\d+)(h|m|s)/gi);
-      if(m){
-        for(let part of m){
-          let num=parseInt(part);
-          if(part.includes('h')) s+=num*3600;
-          else if(part.includes('m')) s+=num*60;
-          else if(part.includes('s')) s+=num;
-        }
+<div>
+  <select id="teacherSelect">
+    <option value="">اختر المدرس</option>
+  </select>
+  <select id="chapterSelect">
+    <option value="">اختر الباب</option>
+  </select>
+  <button id="filterBtn">بحث 🔍</button>
+  <button id="showAllBtn" style="background:#28a745;">عرض الكل 🌍</button>
+</div>
+
+<table id="videosTable">
+  <thead>
+    <tr>
+      <th>العنوان</th>
+      <th>المادة</th>
+      <th>الباب</th>
+      <th>رابط الفيديو</th>
+      <th>اسم المحاضرة</th>
+      <th>تحديث</th>
+    </tr>
+  </thead>
+  <tbody id="tableBody">
+    <tr><td colspan="6" style="text-align:center; color:#ffd700;">جارٍ تحميل القوائم...</td></tr>
+  </tbody>
+</table>
+
+<div id="log"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-app.js";
+import { getDatabase, ref, get, update } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCdhj73cKJc2J2_tDHw2-89EemZx-EGMJQ",
+  authDomain: "alamer-526ff.firebaseapp.com",
+  databaseURL: "https://alamer-526ff-default-rtdb.firebaseio.com",
+  projectId: "alamer-526ff",
+  storageBucket: "alamer-526ff.firebasestorage.app",
+  messagingSenderId: "523879269039",
+  appId: "1:523879269039:web:634861aa34641bfebf8a5a"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const teacherSelect = document.getElementById("teacherSelect");
+const chapterSelect = document.getElementById("chapterSelect");
+const filterBtn = document.getElementById("filterBtn");
+const showAllBtn = document.getElementById("showAllBtn");
+const tableBody = document.getElementById("tableBody");
+const logBox = document.getElementById("log");
+
+function log(msg) {
+  logBox.textContent += msg + "\n";
+}
+
+// تحميل القوائم تلقائيًا من الفايربيس
+async function loadFilters() {
+  try {
+    const snap = await get(ref(db, "videos"));
+    if (!snap.exists()) return;
+    const data = snap.val();
+
+    const teachers = new Set();
+    const chapters = new Map(); // teacher -> [chapters]
+
+    Object.values(data).forEach(v => {
+      if (v.teacher) {
+        teachers.add(v.teacher);
+        if (!chapters.has(v.teacher)) chapters.set(v.teacher, new Set());
+        if (v.chapter) chapters.get(v.teacher).add(v.chapter);
       }
-      return s;
+    });
+
+    teacherSelect.innerHTML = <option value="">اختر المدرس</option>;
+    teachers.forEach(t => {
+      teacherSelect.innerHTML += <option value="${t}">${t}</option>;
+    });
+
+    // تحديث الأبواب عند اختيار المدرس
+    teacherSelect.onchange = () => {
+      chapterSelect.innerHTML = <option value="">اختر الباب</option>;
+      const teacher = teacherSelect.value;
+      if (chapters.has(teacher)) {
+        chapters.get(teacher).forEach(ch => {
+          chapterSelect.innerHTML += <option value="${ch}">${ch}</option>;
+        });
+      }
+    };
+
+    tableBody.innerHTML = <tr><td colspan="6" style="text-align:center; color:#ffd700;">اختر مدرس وباب ثم اضغط "بحث"</td></tr>;
+  } catch (e) {
+    log("❌ خطأ في تحميل القوائم:\n" + e);
+  }
+}
+
+async function loadVideos(filter = {}) {
+  logBox.textContent = "";
+  tableBody.innerHTML = <tr><td colspan="6" style="text-align:center;color:#ffd700;">جارٍ تحميل البيانات...</td></tr>;
+  try {
+    const snap = await get(ref(db, "videos"));
+    if (!snap.exists()) {
+      tableBody.innerHTML = <tr><td colspan="6">❌ لا توجد بيانات فيديوهات.</td></tr>;
+      return;
     }
 
-    function convert(){
-      let url=document.getElementById("ytUrl").value.trim();
-      if(!url){ alert("دخل لينك يوتيوب"); return; }
-      try{
-        let u=new URL(url);
-        let id="";
-        if(u.hostname.includes("youtu.be")){
-          id=u.pathname.replace("/","");
-        } else {
-          id=u.searchParams.get("v");
-        }
-        if(!id){ alert("لينك غير صالح"); return; }
-        let start=u.searchParams.get("t")||u.searchParams.get("start");
-        let seconds=toSeconds(start);
-        finalLink=`https://www.youtube.com/embed/${id}?autoplay=1&mute=1${seconds?`&start=${seconds}`:""}`;
-        document.getElementById("output").innerHTML=
-          `🔗 اللينك الجديد:<br><a href="${finalLink}" target="_blank">${finalLink}</a>`;
-        document.getElementById("copyBtn").style.display="inline-block";
-      } catch(e){ alert("لينك غير صحيح"); }
+    const data = snap.val();
+    const filtered = Object.entries(data).filter(([id, v]) => {
+      return (!filter.teacher || v.teacher === filter.teacher) &&
+             (!filter.chapter || v.chapter === filter.chapter);
+    });
+
+    if (filtered.length === 0) {
+      tableBody.innerHTML = <tr><td colspan="6">❌ لا توجد فيديوهات مطابقة.</td></tr>;
+      return;
     }
 
-    function copyLink(){
-      if(!finalLink){ return; }
-      navigator.clipboard.writeText(finalLink).then(()=>{
-        alert("✔️ تم نسخ اللينك بنجاح!");
-      }).catch(()=>{
-        alert("❌ حصل خطأ أثناء النسخ");
-      });
-    }
-  </script>
+    tableBody.innerHTML = "";
+    filtered.forEach(([id, v]) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${v.title || "بدون عنوان"}</td>
+        <td>${v.subject || "-"}</td>
+        <td>${v.chapter || "-"}</td>
+        <td><a href="${v.url}" target="_blank" style="color:#ffd700;">رابط</a></td>
+        <td><input id="lec-${id}" value="${v.lecture || ""}" placeholder="اكتب اسم المحاضرة هنا"></td>
+        <td><button id="btn-${id}" style="background:#28a745;">تحديث</button></td>
+      `;
+      tableBody.appendChild(tr);
+
+      document.getElementById(btn-${id}).onclick = async () => {
+        const newLecture = document.getElementById(lec-${id}).value.trim();
+        if (!newLecture) return alert("⚠ اكتب اسم المحاضرة أولاً");
+        await update(ref(db, videos/${id}), { lecture: newLecture });
+        log(✅ تم تحديث ${id} → ${newLecture});
+        alert("✅ تم الحفظ بنجاح");
+      };
+    });
+
+  } catch (err) {
+    log("❌ خطأ في تحميل البيانات:\n" + err);
+  }
+}
+
+filterBtn.onclick = () => {
+  const teacher = teacherSelect.value;
+  const chapter = chapterSelect.value;
+  if (!teacher || !chapter) return alert("⚠ اختر مدرس وباب أولاً");
+  loadVideos({ teacher, chapter });
+};
+
+showAllBtn.onclick = () => loadVideos();
+
+loadFilters();
+</script>
 </body>
 </html>
