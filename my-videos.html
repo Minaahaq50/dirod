@@ -1,198 +1,165 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<title>🎓 تعديل المحاضرات في Firebase</title>
-<style>
-body {
-  background: #121212; color: #fff; font-family: 'Cairo', sans-serif;
-  text-align: center; padding: 20px;
-}
-select, button {
-  padding: 8px 12px; border-radius: 6px; border: none; font-size: 15px;
-}
-select { width: 200px; margin: 5px; background: #222; color: #fff; }
-button {
-  background: #f36; color: #fff; cursor: pointer;
-}
-button:hover { background: #ff4d4d; }
+  <meta charset="UTF-8">
+  <title>🎬 تعديل روابط الفيديوهات حسب المادة والمدرس</title>
 
-table {
-  width: 95%; margin: 20px auto; border-collapse: collapse;
-}
-th, td {
-  border: 1px solid #444; padding: 8px;
-}
-th { background: #222; color: #ffd700; }
-td input {
-  width: 90%; padding: 6px; border-radius: 5px; border: none;
-  background: #222; color: #fff;
-}
-#log {
-  margin-top: 20px; text-align: left; max-width: 700px; margin-inline: auto;
-  background: #1a1a1a; padding: 15px; border-radius: 10px; white-space: pre-wrap;
-}
-</style>
-</head>
-<body>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
-<h2>🎓 تعديل المحاضرات في Firebase</h2>
-
-<div>
-  <select id="teacherSelect">
-    <option value="">اختر المدرس</option>
-  </select>
-  <select id="chapterSelect">
-    <option value="">اختر الباب</option>
-  </select>
-  <button id="filterBtn">بحث 🔍</button>
-  <button id="showAllBtn" style="background:#28a745;">عرض الكل 🌍</button>
-</div>
-
-<table id="videosTable">
-  <thead>
-    <tr>
-      <th>العنوان</th>
-      <th>المادة</th>
-      <th>الباب</th>
-      <th>رابط الفيديو</th>
-      <th>اسم المحاضرة</th>
-      <th>تحديث</th>
-    </tr>
-  </thead>
-  <tbody id="tableBody">
-    <tr><td colspan="6" style="text-align:center; color:#ffd700;">جارٍ تحميل القوائم...</td></tr>
-  </tbody>
-</table>
-
-<div id="log"></div>
-
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-app.js";
-import { getDatabase, ref, get, update } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-database.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCdhj73cKJc2J2_tDHw2-89EemZx-EGMJQ",
-  authDomain: "alamer-526ff.firebaseapp.com",
-  databaseURL: "https://alamer-526ff-default-rtdb.firebaseio.com",
-  projectId: "alamer-526ff",
-  storageBucket: "alamer-526ff.firebasestorage.app",
-  messagingSenderId: "523879269039",
-  appId: "1:523879269039:web:634861aa34641bfebf8a5a"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-
-const teacherSelect = document.getElementById("teacherSelect");
-const chapterSelect = document.getElementById("chapterSelect");
-const filterBtn = document.getElementById("filterBtn");
-const showAllBtn = document.getElementById("showAllBtn");
-const tableBody = document.getElementById("tableBody");
-const logBox = document.getElementById("log");
-
-function log(msg) {
-  logBox.textContent += msg + "\n";
-}
-
-// تحميل القوائم تلقائيًا من الفايربيس
-async function loadFilters() {
-  try {
-    const snap = await get(ref(db, "videos"));
-    if (!snap.exists()) return;
-    const data = snap.val();
-
-    const teachers = new Set();
-    const chapters = new Map(); // teacher -> [chapters]
-
-    Object.values(data).forEach(v => {
-      if (v.teacher) {
-        teachers.add(v.teacher);
-        if (!chapters.has(v.teacher)) chapters.set(v.teacher, new Set());
-        if (v.chapter) chapters.get(v.teacher).add(v.chapter);
-      }
-    });
-
-    teacherSelect.innerHTML = <option value="">اختر المدرس</option>;
-    teachers.forEach(t => {
-      teacherSelect.innerHTML += <option value="${t}">${t}</option>;
-    });
-
-    // تحديث الأبواب عند اختيار المدرس
-    teacherSelect.onchange = () => {
-      chapterSelect.innerHTML = <option value="">اختر الباب</option>;
-      const teacher = teacherSelect.value;
-      if (chapters.has(teacher)) {
-        chapters.get(teacher).forEach(ch => {
-          chapterSelect.innerHTML += <option value="${ch}">${ch}</option>;
-        });
-      }
+  <script>
+    // إعداد Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyCdhj73cKJc2J2_tDHw2-89EemZx-EGMJQ",
+      authDomain: "alamer-526ff.firebaseapp.com",
+      databaseURL: "https://alamer-526ff-default-rtdb.firebaseio.com",
+      projectId: "alamer-526ff",
+      storageBucket: "alamer-526ff.firebasestorage.app",
+      messagingSenderId: "523879269039",
+      appId: "1:523879269039:web:634861aa34641bfebf8a5a",
     };
 
-    tableBody.innerHTML = <tr><td colspan="6" style="text-align:center; color:#ffd700;">اختر مدرس وباب ثم اضغط "بحث"</td></tr>;
-  } catch (e) {
-    log("❌ خطأ في تحميل القوائم:\n" + e);
-  }
-}
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const auth = firebase.auth();
 
-async function loadVideos(filter = {}) {
-  logBox.textContent = "";
-  tableBody.innerHTML = <tr><td colspan="6" style="text-align:center;color:#ffd700;">جارٍ تحميل البيانات...</td></tr>;
-  try {
-    const snap = await get(ref(db, "videos"));
-    if (!snap.exists()) {
-      tableBody.innerHTML = <tr><td colspan="6">❌ لا توجد بيانات فيديوهات.</td></tr>;
-      return;
+    const ADMIN_UID = "Se5eNLTKoqUGjeShmRJRHDiKogF3";
+
+    // تسجيل الدخول
+    function login() {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
+
+      auth.signInWithEmailAndPassword(email, password)
+        .then(userCredential => {
+          const user = userCredential.user;
+          if (user.uid === ADMIN_UID) {
+            document.getElementById("loginBox").style.display = "none";
+            document.getElementById("adminPanel").style.display = "block";
+            loadFilters();
+          } else {
+            alert("❌ هذا الحساب ليس أدمن");
+            auth.signOut();
+          }
+        })
+        .catch(err => alert("خطأ: " + err.message));
     }
 
-    const data = snap.val();
-    const filtered = Object.entries(data).filter(([id, v]) => {
-      return (!filter.teacher || v.teacher === filter.teacher) &&
-             (!filter.chapter || v.chapter === filter.chapter);
-    });
+    // تحميل المواد والمدرسين
+    async function loadFilters() {
+      const snapshot = await db.ref("videos").get();
+      if (!snapshot.exists()) return alert("❌ لا توجد فيديوهات في الداتا");
 
-    if (filtered.length === 0) {
-      tableBody.innerHTML = <tr><td colspan="6">❌ لا توجد فيديوهات مطابقة.</td></tr>;
-      return;
+      const data = snapshot.val();
+      const subjects = new Set();
+      const teachers = new Set();
+
+      Object.values(data).forEach(v => {
+        if (v.subject) subjects.add(v.subject);
+        if (v.teacher) teachers.add(v.teacher);
+      });
+
+      const subjectSelect = document.getElementById("subjectSelect");
+      const teacherSelect = document.getElementById("teacherSelect");
+
+      subjectSelect.innerHTML = <option value="">-- اختر المادة --</option>;
+      teacherSelect.innerHTML = <option value="">-- اختر المدرس --</option>;
+
+      subjects.forEach(s => subjectSelect.innerHTML += <option value="${s}">${s}</option>);
+      teachers.forEach(t => teacherSelect.innerHTML += <option value="${t}">${t}</option>);
     }
 
-    tableBody.innerHTML = "";
-    filtered.forEach(([id, v]) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${v.title || "بدون عنوان"}</td>
-        <td>${v.subject || "-"}</td>
-        <td>${v.chapter || "-"}</td>
-        <td><a href="${v.url}" target="_blank" style="color:#ffd700;">رابط</a></td>
-        <td><input id="lec-${id}" value="${v.lecture || ""}" placeholder="اكتب اسم المحاضرة هنا"></td>
-        <td><button id="btn-${id}" style="background:#28a745;">تحديث</button></td>
-      `;
-      tableBody.appendChild(tr);
+    // تحميل الفيديوهات حسب المادة والمدرس
+    async function loadVideos() {
+      const subject = document.getElementById("subjectSelect").value;
+      const teacher = document.getElementById("teacherSelect").value;
+      const container = document.getElementById("videosList");
+      container.innerHTML = "<p>⏳ جاري التحميل...</p>";
 
-      document.getElementById(btn-${id}).onclick = async () => {
-        const newLecture = document.getElementById(lec-${id}).value.trim();
-        if (!newLecture) return alert("⚠ اكتب اسم المحاضرة أولاً");
-        await update(ref(db, videos/${id}), { lecture: newLecture });
-        log(✅ تم تحديث ${id} → ${newLecture});
-        alert("✅ تم الحفظ بنجاح");
-      };
-    });
+      const snapshot = await db.ref("videos").get();
+      if (!snapshot.exists()) return container.innerHTML = "<p style='color:red;'>❌ لا توجد فيديوهات</p>";
 
-  } catch (err) {
-    log("❌ خطأ في تحميل البيانات:\n" + err);
-  }
-}
+      const data = snapshot.val();
+      const filtered = Object.entries(data).filter(([id, v]) =>
+        (!subject || v.subject === subject) &&
+        (!teacher || v.teacher === teacher)
+      );
 
-filterBtn.onclick = () => {
-  const teacher = teacherSelect.value;
-  const chapter = chapterSelect.value;
-  if (!teacher || !chapter) return alert("⚠ اختر مدرس وباب أولاً");
-  loadVideos({ teacher, chapter });
-};
+      if (filtered.length === 0) {
+        container.innerHTML = "<p style='color:green;'>🎉 لا توجد فيديوهات مطابقة</p>";
+        return;
+      }
 
-showAllBtn.onclick = () => loadVideos();
+      container.innerHTML = "";
 
-loadFilters();
-</script>
+      filtered.forEach(([id, v]) => {
+        const div = document.createElement("div");
+        div.style.marginBottom = "10px";
+        div.style.padding = "10px";
+        div.style.border = "1px solid #ddd";
+        div.style.borderRadius = "8px";
+        div.style.background = "#fff";
+
+        div.innerHTML = `
+          <p><b>${v.title || "بدون عنوان"}</b></p>
+          <p style="color:#555;">${v.subject} - ${v.teacher}</p>
+          <input id="link-${id}" type="text" value="${v.url || ""}" placeholder="رابط الفيديو" style="width:90%;padding:6px;border-radius:6px;border:1px solid #ccc;">
+          <button onclick="updateLink('${id}')" style="margin-top:6px;padding:6px 10px;border:none;border-radius:6px;background:#28a745;color:#fff;">💾 حفظ</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    // تعديل الرابط في Firebase
+    async function updateLink(videoId) {
+      const input = document.getElementById(link-${videoId});
+      const newLink = input.value.trim();
+
+      if (!newLink) return alert("❌ من فضلك أدخل رابط صحيح");
+
+      try {
+        await db.ref(videos/${videoId}/url).set(newLink);
+        input.style.borderColor = "green";
+        alert("✅ تم تحديث الرابط بنجاح");
+      } catch (e) {
+        alert("❌ خطأ أثناء التحديث: " + e.message);
+      }
+    }
+
+    window.login = login;
+    window.loadVideos = loadVideos;
+    window.updateLink = updateLink;
+  </script>
+</head>
+
+<body style="font-family:'Cairo',sans-serif;text-align:center;background:#f0f2f5;padding:20px;">
+
+  <h2>🔐 تسجيل الدخول</h2>
+
+  <div id="loginBox">
+    <input id="email" type="email" placeholder="البريد الإلكتروني" style="padding:8px;margin:5px;"><br>
+    <input id="password" type="password" placeholder="كلمة المرور" style="padding:8px;margin:5px;"><br>
+    <button onclick="login()" style="padding:10px 20px;border:none;border-radius:8px;background:#007bff;color:#fff;">تسجيل الدخول</button>
+  </div>
+
+  <div id="adminPanel" style="display:none;">
+    <h2>🎬 تعديل روابط الفيديوهات</h2>
+
+    <div style="margin:10px;">
+      <select id="subjectSelect" onchange="loadVideos()" style="padding:8px;border-radius:6px;">
+        <option value="">-- اختر المادة --</option>
+      </select>
+
+      <select id="teacherSelect" onchange="loadVideos()" style="padding:8px;border-radius:6px;">
+        <option value="">-- اختر المدرس --</option>
+      </select>
+    </div>
+
+    <div id="videosList" style="margin:20px;text-align:right;background:#fff;padding:15px;border-radius:10px;max-height:400px;overflow-y:auto;">
+      <p>اختر المادة أو المدرس لعرض الفيديوهات...</p>
+    </div>
+  </div>
 </body>
 </html>
