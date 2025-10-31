@@ -2,12 +2,126 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>🎬 تعديل روابط الفيديوهات حسب المادة والمدرس</title>
+  <title>🎬 لوحة تعديل روابط الفيديوهات</title>
 
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: #f4f6f9;
+      color: #333;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+
+    h2 {
+      color: #007bff;
+      margin-top: 20px;
+    }
+
+    .container {
+      width: 90%;
+      max-width: 700px;
+      margin: 20px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+
+    input, select, button {
+      padding: 10px;
+      margin: 6px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      width: 90%;
+      font-size: 16px;
+    }
+
+    button {
+      background: #007bff;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+
+    .video-card {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 10px;
+      background: #fafafa;
+      text-align: right;
+    }
+
+    .video-card p {
+      margin: 4px 0;
+    }
+
+    .success {
+      color: green;
+      font-weight: bold;
+    }
+
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+
+    .flex {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    select {
+      width: 48%;
+    }
+
+  </style>
+</head>
+<body>
+
+  <h2>🔐 تسجيل الدخول</h2>
+
+  <!-- صندوق تسجيل الدخول -->
+  <div class="container" id="loginBox">
+    <input id="email" type="email" placeholder="البريد الإلكتروني"><br>
+    <input id="password" type="password" placeholder="كلمة المرور"><br>
+    <button onclick="login()">تسجيل الدخول</button>
+  </div>
+
+  <!-- لوحة الأدمن -->
+  <div class="container" id="adminPanel" style="display:none;">
+    <h2>🎬 تعديل روابط الفيديوهات</h2>
+
+    <div class="flex">
+      <select id="subjectSelect" onchange="loadVideos()">
+        <option value="">-- اختر المادة --</option>
+      </select>
+      <select id="teacherSelect" onchange="loadVideos()">
+        <option value="">-- اختر المدرس --</option>
+      </select>
+    </div>
+
+    <div id="videosList" style="margin-top:20px;text-align:right;max-height:400px;overflow-y:auto;">
+      <p>اختر المادة أو المدرس لعرض الفيديوهات...</p>
+    </div>
+  </div>
 
   <script>
     // إعداد Firebase
@@ -44,7 +158,7 @@
             auth.signOut();
           }
         })
-        .catch(err => alert("خطأ: " + err.message));
+        .catch(err => alert("⚠️ خطأ: " + err.message));
     }
 
     // تحميل المواد والمدرسين
@@ -64,14 +178,14 @@
       const subjectSelect = document.getElementById("subjectSelect");
       const teacherSelect = document.getElementById("teacherSelect");
 
-      subjectSelect.innerHTML = <option value="">-- اختر المادة --</option>;
-      teacherSelect.innerHTML = <option value="">-- اختر المدرس --</option>;
+      subjectSelect.innerHTML = '<option value="">-- اختر المادة --</option>';
+      teacherSelect.innerHTML = '<option value="">-- اختر المدرس --</option>';
 
-      subjects.forEach(s => subjectSelect.innerHTML += <option value="${s}">${s}</option>);
-      teachers.forEach(t => teacherSelect.innerHTML += <option value="${t}">${t}</option>);
+      subjects.forEach(s => subjectSelect.innerHTML += `<option value="${s}">${s}</option>`);
+      teachers.forEach(t => teacherSelect.innerHTML += `<option value="${t}">${t}</option>`);
     }
 
-    // تحميل الفيديوهات حسب المادة والمدرس
+    // تحميل الفيديوهات
     async function loadVideos() {
       const subject = document.getElementById("subjectSelect").value;
       const teacher = document.getElementById("teacherSelect").value;
@@ -79,7 +193,7 @@
       container.innerHTML = "<p>⏳ جاري التحميل...</p>";
 
       const snapshot = await db.ref("videos").get();
-      if (!snapshot.exists()) return container.innerHTML = "<p style='color:red;'>❌ لا توجد فيديوهات</p>";
+      if (!snapshot.exists()) return container.innerHTML = "<p class='error'>❌ لا توجد فيديوهات</p>";
 
       const data = snapshot.val();
       const filtered = Object.entries(data).filter(([id, v]) =>
@@ -88,7 +202,7 @@
       );
 
       if (filtered.length === 0) {
-        container.innerHTML = "<p style='color:green;'>🎉 لا توجد فيديوهات مطابقة</p>";
+        container.innerHTML = "<p class='success'>🎉 لا توجد فيديوهات مطابقة</p>";
         return;
       }
 
@@ -96,31 +210,25 @@
 
       filtered.forEach(([id, v]) => {
         const div = document.createElement("div");
-        div.style.marginBottom = "10px";
-        div.style.padding = "10px";
-        div.style.border = "1px solid #ddd";
-        div.style.borderRadius = "8px";
-        div.style.background = "#fff";
-
+        div.className = "video-card";
         div.innerHTML = `
           <p><b>${v.title || "بدون عنوان"}</b></p>
           <p style="color:#555;">${v.subject} - ${v.teacher}</p>
-          <input id="link-${id}" type="text" value="${v.url || ""}" placeholder="رابط الفيديو" style="width:90%;padding:6px;border-radius:6px;border:1px solid #ccc;">
-          <button onclick="updateLink('${id}')" style="margin-top:6px;padding:6px 10px;border:none;border-radius:6px;background:#28a745;color:#fff;">💾 حفظ</button>
+          <input id="link-${id}" type="text" value="${v.url || ""}" placeholder="رابط الفيديو">
+          <button onclick="updateLink('${id}')">💾 حفظ التعديل</button>
         `;
         container.appendChild(div);
       });
     }
 
-    // تعديل الرابط في Firebase
+    // تعديل الرابط
     async function updateLink(videoId) {
-      const input = document.getElementById(link-${videoId});
+      const input = document.getElementById(`link-${videoId}`);
       const newLink = input.value.trim();
-
-      if (!newLink) return alert("❌ من فضلك أدخل رابط صحيح");
+      if (!newLink) return alert("⚠️ من فضلك أدخل رابط صحيح");
 
       try {
-        await db.ref(videos/${videoId}/url).set(newLink);
+        await db.ref(`videos/${videoId}/url`).set(newLink);
         input.style.borderColor = "green";
         alert("✅ تم تحديث الرابط بنجاح");
       } catch (e) {
@@ -132,34 +240,6 @@
     window.loadVideos = loadVideos;
     window.updateLink = updateLink;
   </script>
-</head>
 
-<body style="font-family:'Cairo',sans-serif;text-align:center;background:#f0f2f5;padding:20px;">
-
-  <h2>🔐 تسجيل الدخول</h2>
-
-  <div id="loginBox">
-    <input id="email" type="email" placeholder="البريد الإلكتروني" style="padding:8px;margin:5px;"><br>
-    <input id="password" type="password" placeholder="كلمة المرور" style="padding:8px;margin:5px;"><br>
-    <button onclick="login()" style="padding:10px 20px;border:none;border-radius:8px;background:#007bff;color:#fff;">تسجيل الدخول</button>
-  </div>
-
-  <div id="adminPanel" style="display:none;">
-    <h2>🎬 تعديل روابط الفيديوهات</h2>
-
-    <div style="margin:10px;">
-      <select id="subjectSelect" onchange="loadVideos()" style="padding:8px;border-radius:6px;">
-        <option value="">-- اختر المادة --</option>
-      </select>
-
-      <select id="teacherSelect" onchange="loadVideos()" style="padding:8px;border-radius:6px;">
-        <option value="">-- اختر المدرس --</option>
-      </select>
-    </div>
-
-    <div id="videosList" style="margin:20px;text-align:right;background:#fff;padding:15px;border-radius:10px;max-height:400px;overflow-y:auto;">
-      <p>اختر المادة أو المدرس لعرض الفيديوهات...</p>
-    </div>
-  </div>
 </body>
 </html>
