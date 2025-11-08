@@ -12,7 +12,7 @@
 body { font-family:sans-serif; background:#111; color:white; padding:20px; }
 h1 { text-align:center; color:#00f5c4; }
 form { max-width:400px; margin:0 auto 20px auto; text-align:center; }
-input { width:100%; padding:10px; margin:8px 0; border-radius:6px; border:none; }
+input, select { width:100%; padding:10px; margin:8px 0; border-radius:6px; border:none; }
 button { padding:6px 12px; margin:2px; cursor:pointer; border:none; border-radius:5px; }
 .accept { background:#00f5c4; color:black; }
 .trial { background:#ffb347; color:black; }
@@ -39,7 +39,14 @@ th, td { border:1px solid #444; padding:10px; text-align:center; }
 <p id="error"></p>
 
 <table id="requestsTable" style="display:none;">
-  <tr><th>الاسم</th><th>الهاتف</th><th>أيام الاشتراك</th><th>دقايق التجربة</th><th>الإجراء</th></tr>
+  <tr>
+    <th>الاسم</th>
+    <th>الهاتف</th>
+    <th>الشعبة</th>
+    <th>أيام الاشتراك</th>
+    <th>دقايق التجربة</th>
+    <th>الإجراء</th>
+  </tr>
   <tbody id="requests"></tbody>
 </table>
 
@@ -57,7 +64,6 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const auth = firebase.auth();
 
-// uid الأدمن
 const adminUid = "Se5eNLTKoqUGjeShmRJRHDiKogF3";
 
 const requestsTableEl = document.getElementById("requestsTable");
@@ -66,7 +72,6 @@ const statusEl = document.getElementById("status");
 const errorEl = document.getElementById("error");
 const loginFormDiv = document.getElementById("loginForm");
 
-// تسجيل دخول الأدمن
 document.getElementById("adminLogin").addEventListener("submit", e=>{
   e.preventDefault();
   errorEl.textContent = "";
@@ -92,13 +97,12 @@ document.getElementById("adminLogin").addEventListener("submit", e=>{
   });
 });
 
-// تحميل الطلبات
 function loadRequests(){
   requestsBody.innerHTML="";
   db.ref("pendingStudents").once("value")
   .then(snapshot=>{
     if(!snapshot.exists()){
-      requestsBody.innerHTML="<tr><td colspan='5'>لا توجد طلبات حالياً.</td></tr>";
+      requestsBody.innerHTML="<tr><td colspan='6'>لا توجد طلبات حالياً.</td></tr>";
       return;
     }
     snapshot.forEach(child=>{
@@ -108,6 +112,14 @@ function loadRequests(){
       tr.innerHTML = `
         <td>${data.name}</td>
         <td>${data.phone}</td>
+        <td>
+          <select id="class_${key}">
+            <option value="">اختر الشعبة</option>
+            <option value="علمي">علمي</option>
+            <option value="أدبي">أدبي</option>
+            <option value="لغات">لغات</option>
+          </select>
+        </td>
         <td><input type="number" id="days_${key}" placeholder="أيام" style="width:70px;"></td>
         <td><input type="number" id="minutes_${key}" placeholder="دقايق" style="width:70px;"></td>
         <td>
@@ -125,11 +137,15 @@ function loadRequests(){
   });
 }
 
-// قبول كاشتراك (بالأيام)
 function accept(uid){
   const days = parseInt(document.getElementById("days_" + uid).value) || 0;
+  const studentClass = document.getElementById("class_" + uid).value;
   if(days <= 0){
     errorEl.textContent = "❌ برجاء إدخال عدد أيام صحيح.";
+    return;
+  }
+  if(!studentClass){
+    errorEl.textContent = "❌ برجاء اختيار الشعبة.";
     return;
   }
   const duration = days * 24 * 60 * 60 * 1000;
@@ -147,22 +163,27 @@ function accept(uid){
       name: data.name,
       phone: data.phone,
       deviceId: uid,
+      class: studentClass,
       approvedAt,
       expiry,
       trial: false
     }).then(()=>{
       db.ref("pendingStudents/" + uid).remove();
-      statusEl.textContent=`✅ تم الموافقة على ${data.name} لاشتراك ${days} يوم`;
+      statusEl.textContent=`✅ تم الموافقة على ${data.name} (${studentClass}) لاشتراك ${days} يوم`;
       loadRequests();
     });
   });
 }
 
-// قبول كتجربة (بالدقايق)
 function acceptTrial(uid){
   const minutes = parseInt(document.getElementById("minutes_" + uid).value) || 0;
+  const studentClass = document.getElementById("class_" + uid).value;
   if(minutes <= 0){
     errorEl.textContent = "❌ برجاء إدخال عدد دقائق صحيح.";
+    return;
+  }
+  if(!studentClass){
+    errorEl.textContent = "❌ برجاء اختيار الشعبة.";
     return;
   }
   const duration = minutes * 60 * 1000;
@@ -180,18 +201,18 @@ function acceptTrial(uid){
       name: data.name,
       phone: data.phone,
       deviceId: uid,
+      class: studentClass,
       approvedAt,
       expiry,
       trial: true
     }).then(()=>{
       db.ref("pendingStudents/" + uid).remove();
-      statusEl.textContent=`✅ تم إعطاء ${data.name} تجربة ${minutes} دقيقة`;
+      statusEl.textContent=`✅ تم إعطاء ${data.name} (${studentClass}) تجربة ${minutes} دقيقة`;
       loadRequests();
     });
   });
 }
 
-// رفض الطلب
 function reject(uid){
   db.ref("pendingStudents/" + uid).remove()
   .then(()=>{
