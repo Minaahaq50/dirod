@@ -3,17 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>لوحة الإدارة - الطلاب الموافق عليهم</title>
+<title>لوحة الإدارة - تصنيف الطلاب</title>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 
 <style>
-body { font-family:sans-serif; background:#111; color:white; padding:20px; }
+body { font-family:'Cairo', sans-serif; background:#111; color:white; padding:20px; }
 h1 { text-align:center; color:#00f5c4; }
 form { max-width:400px; margin:0 auto; text-align:center; }
 input, select { width:100%; padding:10px; margin:8px 0; border-radius:6px; border:none; }
-button { padding:10px 20px; margin:8px; cursor:pointer; border:none; border-radius:5px; background:#00f5c4; color:#111; }
+button { padding:10px 20px; margin:8px; cursor:pointer; border:none; border-radius:5px; background:#00f5c4; color:#111; font-weight:bold; }
 .delete { background:#ff4f4f; color:white; }
 #studentsTable { width:100%; border-collapse: collapse; margin-top:20px; background:#222; display:none; }
 th, td { border:1px solid #444; padding:10px; text-align:center; font-size:14px; }
@@ -64,10 +64,10 @@ th, td { border:1px solid #444; padding:10px; text-align:center; font-size:14px;
     <tr>
       <th>الاسم</th>
       <th>الهاتف</th>
-      <th>Device ID</th>
+      <th>الشعبة</th>
       <th>النوع</th>
       <th>تاريخ البداية</th>
-      <th>موعد الانتهاء</th>
+      <th>تاريخ الانتهاء</th>
       <th>إجراء</th>
     </tr>
   </thead>
@@ -88,14 +88,12 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const auth = firebase.auth();
 
+const adminUid = "CiYcWf7Xo5Yzex4fslyWO40FyQh2";
 const studentsBody = document.getElementById("studentsBody");
 const statusEl = document.getElementById("status");
 const errorEl = document.getElementById("error");
-const tableEl = document.getElementById("studentsTable");
-const loginDiv = document.getElementById("loginDiv");
 const summary = document.getElementById("summary");
 
-const adminUid = "CiYcWf7Xo5Yzex4fslyWO40FyQh2";
 let studentsData = {};
 
 document.getElementById("adminLogin").addEventListener("submit", e=>{
@@ -106,40 +104,54 @@ document.getElementById("adminLogin").addEventListener("submit", e=>{
   const password = document.getElementById("adminPassword").value.trim();
 
   auth.signInWithEmailAndPassword(email,password)
-    .then(res=>{
-      if(res.user.uid !== adminUid){
-        errorEl.textContent="❌ هذا الحساب ليس مسؤولاً.";
-        statusEl.textContent="";
-        auth.signOut();
-        return;
-      }
-      statusEl.textContent="✅ تم تسجيل الدخول كمسؤول.";
-      loginDiv.style.display="none";
-      tableEl.style.display="table";
-      document.getElementById("filters").style.display="block";
-      loadStudents();
-    })
-    .catch(err=>{
-      errorEl.textContent="❌ فشل تسجيل الدخول. تحقق من البريد وكلمة المرور.";
-      console.error(err);
-    });
+  .then(res=>{
+    if(res.user.uid !== adminUid){
+      errorEl.textContent="❌ هذا الحساب ليس مسؤولاً.";
+      auth.signOut();
+      return;
+    }
+    statusEl.textContent="✅ تم تسجيل الدخول كمسؤول.";
+    document.getElementById("loginDiv").style.display="none";
+    document.getElementById("filters").style.display="block";
+    document.getElementById("studentsTable").style.display="table";
+    loadStudents();
+  })
+  .catch(err=>{
+    errorEl.textContent="❌ فشل تسجيل الدخول.";
+    console.error(err);
+  });
 });
 
 function loadStudents(){
   studentsBody.innerHTML="";
   db.ref("approvedStudents").once("value")
-    .then(snapshot=>{
-      if(!snapshot.exists()){
-        studentsBody.innerHTML="<tr><td colspan='7'>لا يوجد طلاب.</td></tr>";
-        return;
-      }
-      studentsData = snapshot.val();
-      renderStudents(studentsData);
-    })
-    .catch(err=>{
-      errorEl.textContent="❌ حدث خطأ أثناء تحميل البيانات.";
-      console.error(err);
+  .then(snapshot=>{
+    if(!snapshot.exists()){
+      studentsBody.innerHTML="<tr><td colspan='7'>لا يوجد طلاب.</td></tr>";
+      return;
+    }
+    studentsData = {};
+    snapshot.forEach(child=>{
+      const uid = child.key;
+      const data = child.val();
+      const approvedAt = data.approvedAt || 0;
+      const expiry = data.expiry || 0;
+      const duration = expiry - approvedAt;
+      const twoDays = 2 * 24 * 60 * 60 * 1000;
+      const type = duration > twoDays ? "paid" : "trial"; // تحديد النوع تلقائيًا
+
+      studentsData[uid] = {
+        name: data.name || "-",
+        phone: data.phone || "-",
+        class: data.class || "-",
+        deviceId: uid,
+        approvedAt,
+        expiry,
+        type
+      };
     });
+    renderStudents(studentsData);
+  });
 }
 
 function renderStudents(data){
@@ -148,66 +160,62 @@ function renderStudents(data){
   let total = 0;
   for(const uid in data){
     const s = data[uid];
-    const expiryDate = s.expiry ? new Date(s.expiry).toLocaleDateString("ar-EG") : "-";
-    const startDate = s.startDate ? new Date(s.startDate).toLocaleDateString("ar-EG") : "-";
-    const type = s.type === "paid" ? "💰 مدفوع" : "🎁 تجربة";
-    if(s.type === "paid") total += 100; // فرضًا الاشتراك الشهري = 100 جنيه
+    const startDate = new Date(s.approvedAt).toLocaleDateString("ar-EG");
+    const expiryDate = new Date(s.expiry).toLocaleDateString("ar-EG");
+    const typeText = s.type === "paid" ? "💰 اشتراك" : "🎁 تجربة";
+    if(s.type === "paid") total += 100; // فرضًا الاشتراك الشهري 100 جنيه
     count++;
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${s.name || "-"}</td>
-      <td>${s.phone || "-"}</td>
-      <td>${s.deviceId || "-"}</td>
-      <td>${type}</td>
+      <td>${s.name}</td>
+      <td>${s.phone}</td>
+      <td>${s.class}</td>
+      <td>${typeText}</td>
       <td>${startDate}</td>
       <td>${expiryDate}</td>
-      <td><button class="delete" onclick="deleteStudent('${uid}','${s.name || ''}')">حذف</button></td>
+      <td><button class="delete" onclick="deleteStudent('${uid}','${s.name}')">🗑 حذف</button></td>
     `;
     studentsBody.appendChild(tr);
   }
-  summary.textContent = `👥 عدد الطلاب: ${count} | 💵 إجمالي المبلغ: ${total} جنيه`;
+  summary.textContent = `👥 عدد الطلاب: ${count} | 💵 إجمالي الاشتراكات: ${total} جنيه`;
 }
 
 function applyFilters(){
-  const searchValue = document.getElementById("searchInput").value.trim().toLowerCase();
-  const typeFilter = document.getElementById("typeFilter").value;
-  const weekFilter = document.getElementById("weekFilter").value;
-  const now = new Date();
+  const search = document.getElementById("searchInput").value.trim().toLowerCase();
+  const type = document.getElementById("typeFilter").value;
+  const week = document.getElementById("weekFilter").value;
+  const now = Date.now();
 
   const filtered = {};
   for(const uid in studentsData){
     const s = studentsData[uid];
-    if(typeFilter !== "all" && s.type !== typeFilter) continue;
 
-    if(searchValue){
-      const nameMatch = (s.name || "").toLowerCase().includes(searchValue);
-      const phoneMatch = (s.phone || "").toLowerCase().includes(searchValue);
+    if(type !== "all" && s.type !== type) continue;
+
+    if(search){
+      const nameMatch = s.name.toLowerCase().includes(search);
+      const phoneMatch = s.phone.toLowerCase().includes(search);
       if(!nameMatch && !phoneMatch) continue;
     }
 
-    if(weekFilter !== "all" && s.startDate){
-      const start = new Date(s.startDate);
-      const diffWeeks = Math.floor((now - start) / (7*24*60*60*1000));
-      if(diffWeeks != weekFilter) continue;
+    if(week !== "all"){
+      const diffWeeks = Math.floor((now - s.approvedAt) / (7*24*60*60*1000));
+      if(diffWeeks != week) continue;
     }
 
     filtered[uid] = s;
   }
+
   renderStudents(filtered);
 }
 
 function deleteStudent(uid,name){
-  if(confirm(`هل أنت متأكد من حذف ${name || 'هذا الطالب'}؟`)){
-    db.ref("approvedStudents/"+uid).remove()
-      .then(()=>{
-        statusEl.textContent=`✅ تم حذف ${name || "الطالب"} بنجاح.`;
-        loadStudents();
-      })
-      .catch(err=>{
-        errorEl.textContent="❌ حدث خطأ أثناء الحذف.";
-        console.error(err);
-      });
+  if(confirm(`هل أنت متأكد من حذف ${name}؟`)){
+    db.ref("approvedStudents/"+uid).remove().then(()=>{
+      statusEl.textContent=`✅ تم حذف ${name}`;
+      loadStudents();
+    });
   }
 }
 </script>
