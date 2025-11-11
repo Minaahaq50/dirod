@@ -3,79 +3,60 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>📊 أرباح الاشتراكات الأسبوعية</title>
+<title>📅 أرباح الاشتراكات الأسبوعية</title>
 
-<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
 body {
   font-family: 'Cairo', sans-serif;
-  background: #0e0e0e;
-  color: white;
-  padding: 30px;
+  background: #111;
+  color: #fff;
   text-align: center;
+  padding: 20px;
 }
-
-h1 {
-  color: #00f5c4;
-  margin-bottom: 10px;
-}
-
-canvas {
-  max-width: 800px;
-  margin: 20px auto;
-  display: block;
-  background: #1a1a1a;
-  border-radius: 10px;
-  padding: 10px;
-}
-
+h1 { color: #00f5c4; }
 table {
-  width: 100%;
-  max-width: 800px;
   margin: 20px auto;
   border-collapse: collapse;
+  width: 95%;
   background: #1a1a1a;
   border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 0 10px #00f5c433;
 }
-
 th, td {
-  padding: 12px;
+  padding: 10px;
   border-bottom: 1px solid #333;
 }
-
 th {
   background: #00f5c420;
   color: #00f5c4;
 }
-
 tr:hover {
   background: #222;
 }
-
-#status {
-  color: #00f5c4;
-  margin: 15px;
+canvas {
+  max-width: 900px;
+  margin: 30px auto;
+  display: block;
 }
 </style>
 </head>
 <body>
 
 <h1>📊 لوحة أرباح الاشتراكات الأسبوعية</h1>
-<p id="status">جارٍ حساب الأرباح...</p>
+<p id="status">⏳ جاري الحساب...</p>
 
-<canvas id="earningsChart" height="150"></canvas>
+<canvas id="chart" height="120"></canvas>
 
-<table id="earningsTable">
+<table>
   <thead>
     <tr>
       <th>🗓 الأسبوع</th>
+      <th>📅 من تاريخ</th>
+      <th>📅 إلى تاريخ</th>
       <th>👥 عدد المشتركين</th>
       <th>💰 الأرباح (جنيه)</th>
     </tr>
@@ -84,7 +65,6 @@ tr:hover {
 </table>
 
 <script>
-// إعداد Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyCdhj73cKJc2J2_tDHw2-89EemZx-EGMJQ",
   authDomain: "alamer-526ff.firebaseapp.com",
@@ -97,22 +77,25 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-const statusEl = document.getElementById("status");
-const tableBody = document.getElementById("tableBody");
-const chartCanvas = document.getElementById("earningsChart");
-
-const subscriptionPrice = 100; // سعر الاشتراك الشهري
 const DAY = 24 * 60 * 60 * 1000;
 const WEEK = 7 * DAY;
 const MONTH = 30 * DAY;
+const PRICE = 100;
 
-// 🔹 تحديد أول الأسبوع بحيث ينتهي يوم الاثنين
-function getWeekNumber(timestamp) {
-  const mondayOffset = 1; // الاثنين
-  const baseDate = new Date(2024, 0, 1);
-  const diff = timestamp - baseDate.getTime();
-  const adjusted = diff - ((baseDate.getDay() - mondayOffset + 7) % 7) * DAY;
-  return Math.floor(adjusted / WEEK);
+const statusEl = document.getElementById("status");
+const tableBody = document.getElementById("tableBody");
+
+function getWeekRange(date) {
+  const start = new Date(date);
+  const day = start.getDay(); // 0 = الأحد
+  const diff = day === 1 ? 0 : (day + 6) % 7; // نعتبر الاثنين بداية الأسبوع
+  const weekStart = new Date(start - diff * DAY);
+  const weekEnd = new Date(weekStart.getTime() + 6 * DAY);
+  return { start: weekStart, end: weekEnd };
+}
+
+function formatDate(d) {
+  return d.toLocaleDateString("ar-EG");
 }
 
 function calculateWeeklyEarnings() {
@@ -122,83 +105,79 @@ function calculateWeeklyEarnings() {
       return;
     }
 
-    const now = Date.now();
-    let weeklyData = {};
+    const weeklyData = {};
 
     snapshot.forEach(child => {
       const data = child.val();
       const approvedAt = data.approvedAt || 0;
       const expiry = data.expiry || 0;
-
-      if (!approvedAt || !expiry) return;
-
       const duration = expiry - approvedAt;
-      const isPaid = duration > 2 * DAY;
-      if (!isPaid) return;
 
-      // 🔁 احسب كل 30 يوم كاشتراك جديد
+      if (!approvedAt || !expiry || duration < 2 * DAY) return;
+
+      // لو الاشتراك أكتر من شهر، احسب كل 30 يوم = 100 جنيه
       const monthsCount = Math.ceil(duration / MONTH);
+
       for (let i = 0; i < monthsCount; i++) {
-        const monthStart = approvedAt + i * MONTH;
-        const weekNum = getWeekNumber(monthStart);
-        if (!weeklyData[weekNum]) weeklyData[weekNum] = { count: 0, total: 0 };
-        weeklyData[weekNum].count++;
-        weeklyData[weekNum].total += subscriptionPrice;
+        const paymentDate = approvedAt + i * MONTH;
+        const { start, end } = getWeekRange(paymentDate);
+        const weekKey = start.toISOString().slice(0,10);
+
+        if (!weeklyData[weekKey]) {
+          weeklyData[weekKey] = { start, end, count: 0, total: 0 };
+        }
+
+        weeklyData[weekKey].count++;
+        weeklyData[weekKey].total += PRICE;
       }
     });
 
-    db.ref("weeklyEarnings").set(weeklyData);
     renderTable(weeklyData);
     renderChart(weeklyData);
-    statusEl.textContent = "✅ تم حساب الأرباح الأسبوعية بنجاح.";
+    statusEl.textContent = "✅ تم حساب الأرباح بنجاح.";
   });
 }
 
-// 🔹 عرض الجدول
-function renderTable(weeklyData) {
+function renderTable(data) {
   tableBody.innerHTML = "";
-  const sortedWeeks = Object.keys(weeklyData).sort((a,b)=>b-a);
-  const now = Date.now();
-  const currentWeek = getWeekNumber(now);
+  const sortedWeeks = Object.values(data).sort((a,b)=>a.start-b.start);
 
-  sortedWeeks.forEach(weekNum => {
-    const w = weeklyData[weekNum];
-    const label = (weekNum == currentWeek) ? "الأسبوع الحالي" : `الأسبوع ${weekNum}`;
+  sortedWeeks.forEach((w, i) => {
     const tr = `
-      <tr style="${weekNum == currentWeek ? 'background:#00f5c420;' : ''}">
-        <td>${label}</td>
+      <tr>
+        <td>الأسبوع ${i+1}</td>
+        <td>${formatDate(w.start)}</td>
+        <td>${formatDate(w.end)}</td>
         <td>${w.count}</td>
         <td>${w.total}</td>
-      </tr>`;
+      </tr>
+    `;
     tableBody.insertAdjacentHTML("beforeend", tr);
   });
 }
 
-// 🔹 رسم المخطط البياني
-function renderChart(weeklyData) {
-  const labels = Object.keys(weeklyData).sort((a,b)=>a-b);
-  const earnings = labels.map(week => weeklyData[week].total);
+function renderChart(data) {
+  const sortedWeeks = Object.values(data).sort((a,b)=>a.start-b.start);
+  const labels = sortedWeeks.map(w => `${formatDate(w.start)} - ${formatDate(w.end)}`);
+  const totals = sortedWeeks.map(w => w.total);
 
-  new Chart(chartCanvas, {
-    type: "bar",
+  new Chart(document.getElementById("chart"), {
+    type: "line",
     data: {
-      labels: labels.map(w => `أسبوع ${w}`),
+      labels,
       datasets: [{
-        label: "الأرباح الأسبوعية (جنيه)",
-        data: earnings,
-        backgroundColor: "#00f5c4aa",
+        label: "💰 الأرباح بالجنيه",
+        data: totals,
         borderColor: "#00f5c4",
-        borderWidth: 2,
-        borderRadius: 5
+        backgroundColor: "#00f5c455",
+        fill: true,
+        tension: 0.3
       }]
     },
     options: {
       scales: {
         x: { ticks: { color: "#fff" } },
         y: { ticks: { color: "#fff" }, beginAtZero: true }
-      },
-      plugins: {
-        legend: { labels: { color: "#00f5c4" } }
       }
     }
   });
@@ -208,4 +187,3 @@ calculateWeeklyEarnings();
 </script>
 </body>
 </html>
-
