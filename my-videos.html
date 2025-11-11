@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>📆 أرباح ومشتركي الأسبوع الحالي</title>
+<title>📊 أرباح الأسبوع الحالي</title>
 
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -50,6 +50,9 @@ th {
 tr:hover {
   background: #222833;
 }
+tr.week-ending {
+  background-color: rgba(255, 0, 0, 0.2) !important;
+}
 #summary {
   margin: 20px;
   font-size: 18px;
@@ -66,7 +69,7 @@ canvas {
 </head>
 <body>
 
-<h1>💰 أرباح ومشتركي الأسبوع الحالي</h1>
+<h1>💰 أرباح الاشتراكات للأسبوع الحالي</h1>
 <p id="weekRange"></p>
 
 <table>
@@ -86,7 +89,6 @@ canvas {
 <canvas id="earningsChart"></canvas>
 
 <script>
-// ✅ Firebase إعداد
 const firebaseConfig = {
   apiKey: "AIzaSyCdhj73cKJc2J2_tDHw2-89EemZx-EGMJQ",
   authDomain: "alamer-526ff.firebaseapp.com",
@@ -99,30 +101,33 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// 🗓 تحديد الأسبوع الحالي (الإثنين إلى الأحد)
+// 🔹 تحديد الأسبوع الحالي (الإثنين إلى الأحد)
 function getCurrentWeekRange() {
   const today = new Date();
   const day = today.getDay();
   const monday = new Date(today);
-  monday.setDate(today.getDate() - ((day + 6) % 7)); // الإثنين
+  monday.setDate(today.getDate() - ((day + 6) % 7));
   monday.setHours(0, 0, 0, 0);
   const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6); // الأحد
+  sunday.setDate(monday.getDate() + 6);
   sunday.setHours(23, 59, 59, 999);
   return { start: monday, end: sunday };
 }
 
-// 📊 تحميل بيانات المشتركين
-function loadWeeklySubscribers() {
+function loadEarnings() {
   const { start, end } = getCurrentWeekRange();
+  const today = new Date();
   document.getElementById("weekRange").textContent =
     `🗓 من ${start.toLocaleDateString("ar-EG")} إلى ${end.toLocaleDateString("ar-EG")}`;
 
+  // 🔸 تحديد لو الأسبوع قرب يخلص (آخر يومين)
+  const daysLeftInWeek = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
+  const weekEndingSoon = daysLeftInWeek <= 2;
+
   db.ref("approvedStudents").once("value").then(snapshot => {
-    const tableBody = document.getElementById("studentsTable");
-    tableBody.innerHTML = "";
+    const studentsTable = document.getElementById("studentsTable");
+    studentsTable.innerHTML = "";
     let totalEarnings = 0;
-    let totalSubscribers = 0;
     const monthlyPrice = 100;
 
     snapshot.forEach(child => {
@@ -135,21 +140,16 @@ function loadWeeklySubscribers() {
       const endDate = new Date(expiry);
       const durationDays = Math.ceil((expiry - approvedAt) / (1000 * 60 * 60 * 24));
 
-      // ✅ فقط اللي بدأوا في هذا الأسبوع
+      // ✅ يظهر فقط اللي بدأ اشتراكه هذا الأسبوع
       if (startDate >= start && startDate <= end) {
-        // استبعاد التجارب
-        if (durationDays < 2) return;
-
-        // 🔹 فقط اشتراكات حقيقية (20 يوم فأكثر)
-        if (durationDays >= 20) {
-          let monthsCount = Math.floor(durationDays / 30);
-          if (monthsCount === 0) monthsCount = 1; // من 20 لـ29 يوم = شهر واحد
-
+        if (durationDays >= 20) { // من 20 يوم أو أكثر نعتبره اشتراك شهري
+          const monthsCount = Math.floor(durationDays / 30) || 1;
           const earnings = monthsCount * monthlyPrice;
           totalEarnings += earnings;
-          totalSubscribers++;
 
           const tr = document.createElement("tr");
+          if (weekEndingSoon) tr.classList.add("week-ending");
+
           tr.innerHTML = `
             <td>${name}</td>
             <td>${startDate.toLocaleDateString("ar-EG")}</td>
@@ -157,23 +157,22 @@ function loadWeeklySubscribers() {
             <td>${durationDays}</td>
             <td>${earnings}</td>
           `;
-          tableBody.appendChild(tr);
+          studentsTable.appendChild(tr);
         }
       }
     });
 
-    if (totalSubscribers === 0) {
-      tableBody.innerHTML = `<tr><td colspan="5">😴 لا يوجد مشتركين جدد هذا الأسبوع.</td></tr>`;
+    if (totalEarnings === 0) {
+      studentsTable.innerHTML = `<tr><td colspan="5">😴 لا يوجد اشتراكات جديدة هذا الأسبوع.</td></tr>`;
     }
 
     document.getElementById("summary").textContent =
-      `👥 عدد المشتركين الجدد: ${totalSubscribers} — 💵 إجمالي أرباح الأسبوع: ${totalEarnings} جنيه`;
+      `💵 إجمالي أرباح هذا الأسبوع: ${totalEarnings} جنيه`;
 
     renderChart(totalEarnings);
   });
 }
 
-// 📈 رسم بياني للأرباح
 function renderChart(total) {
   const ctx = document.getElementById("earningsChart");
   new Chart(ctx, {
@@ -181,19 +180,16 @@ function renderChart(total) {
     data: {
       labels: ['أرباح الأسبوع الحالي'],
       datasets: [{
-        label: 'الأرباح بالجنيه المصري',
+        label: 'الأرباح بالجنيه',
         data: [total],
         backgroundColor: '#00f5c4'
       }]
     },
-    options: {
-      scales: { y: { beginAtZero: true } },
-      plugins: { legend: { labels: { color: 'white' } } }
-    }
+    options: { scales: { y: { beginAtZero: true } } }
   });
 }
 
-loadWeeklySubscribers();
+loadEarnings();
 </script>
 
 </body>
