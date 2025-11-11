@@ -86,6 +86,7 @@ canvas {
 <canvas id="earningsChart"></canvas>
 
 <script>
+// ✅ إعداد Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyCdhj73cKJc2J2_tDHw2-89EemZx-EGMJQ",
   authDomain: "alamer-526ff.firebaseapp.com",
@@ -98,7 +99,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// 🔹 تحديد الأسبوع الحالي (الإثنين - الأحد)
+// 🗓️ تحديد الأسبوع الحالي (الإثنين إلى الأحد)
 function getCurrentWeekRange() {
   const today = new Date();
   const day = today.getDay();
@@ -111,51 +112,62 @@ function getCurrentWeekRange() {
   return { start: monday, end: sunday };
 }
 
+// 🔍 تحميل الأرباح
 function loadEarnings() {
   const { start, end } = getCurrentWeekRange();
   document.getElementById("weekRange").textContent =
     `🗓 من ${start.toLocaleDateString("ar-EG")} إلى ${end.toLocaleDateString("ar-EG")}`;
 
   db.ref("approvedStudents").once("value").then(snapshot => {
-    const studentsTable = document.getElementById("studentsTable");
-    studentsTable.innerHTML = "";
+    const tableBody = document.getElementById("studentsTable");
+    tableBody.innerHTML = "";
     let totalEarnings = 0;
     const monthlyPrice = 100;
 
     snapshot.forEach(child => {
-      const s = child.val();
-      const name = s.name || "-";
-      const approvedAt = s.approvedAt || 0;
-      const expiry = s.expiry || 0;
+      const data = child.val();
+      const name = data.name || "-";
+      const approvedAt = data.approvedAt || 0;
+      const expiry = data.expiry || 0;
 
       const startDate = new Date(approvedAt);
       const endDate = new Date(expiry);
       const durationDays = Math.ceil((expiry - approvedAt) / (1000 * 60 * 60 * 24));
 
-      // ✅ الشرط: بدأ الاشتراك داخل هذا الأسبوع فقط
+      // ✅ فقط من بدأ هذا الأسبوع
       if (startDate >= start && startDate <= end) {
-        // 🔹 اشتراك كامل فقط لو مدته 30 يوم أو أكتر
-        if (durationDays >= 30) {
-          const monthsCount = Math.floor(durationDays / 30);
-          const earnings = monthsCount * monthlyPrice;
+        let earnings = 0;
 
-          totalEarnings += earnings;
-
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${name}</td>
-            <td>${startDate.toLocaleDateString("ar-EG")}</td>
-            <td>${endDate.toLocaleDateString("ar-EG")}</td>
-            <td>${durationDays}</td>
-            <td>${earnings}</td>
-          `;
-          studentsTable.appendChild(tr);
+        // 🔸 لو تجربة (أقل من يومين)
+        if (durationDays < 2) {
+          earnings = 0;
         }
+        // 🔸 اشتراك شهري من 20 يوم أو أكثر
+        else if (durationDays >= 20) {
+          let monthsCount = Math.floor(durationDays / 30);
+          if (monthsCount === 0) monthsCount = 1; // من 20 لـ29 يوم نحسبه شهر
+          earnings = monthsCount * monthlyPrice;
+        }
+
+        // 💰 أضف إلى الإجمالي لو في أرباح
+        if (earnings > 0) totalEarnings += earnings;
+
+        // 🧾 أضف الصف للجدول
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${name}</td>
+          <td>${startDate.toLocaleDateString("ar-EG")}</td>
+          <td>${endDate.toLocaleDateString("ar-EG")}</td>
+          <td>${durationDays}</td>
+          <td>${earnings}</td>
+        `;
+        tableBody.appendChild(tr);
       }
     });
 
-    if (totalEarnings === 0) {
-      studentsTable.innerHTML = `<tr><td colspan="5">😴 لا يوجد اشتراكات جديدة هذا الأسبوع.</td></tr>`;
+    // لا يوجد اشتراكات
+    if (tableBody.innerHTML === "") {
+      tableBody.innerHTML = `<tr><td colspan="5">😴 لا يوجد اشتراكات جديدة هذا الأسبوع.</td></tr>`;
     }
 
     document.getElementById("summary").textContent =
@@ -165,6 +177,7 @@ function loadEarnings() {
   });
 }
 
+// 📊 رسم بياني للأرباح
 function renderChart(total) {
   const ctx = document.getElementById("earningsChart");
   new Chart(ctx, {
@@ -172,12 +185,19 @@ function renderChart(total) {
     data: {
       labels: ['أرباح الأسبوع الحالي'],
       datasets: [{
-        label: 'الأرباح بالجنيه',
+        label: 'بالجنيه المصري',
         data: [total],
         backgroundColor: '#00f5c4'
       }]
     },
-    options: { scales: { y: { beginAtZero: true } } }
+    options: {
+      scales: {
+        y: { beginAtZero: true }
+      },
+      plugins: {
+        legend: { labels: { color: 'white' } }
+      }
+    }
   });
 }
 
