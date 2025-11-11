@@ -1,298 +1,215 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <title>لوحة نشر الفيديوهات + إحصائيات</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة الإدارة - الطلاب الموافق عليهم</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-  <style>
-    body {
-      font-family: 'Cairo', Arial, sans-serif;
-      background-color: #121212;
-      color: white;
-      padding: 20px;
-    }
-    h2 {
-      margin-top: 20px;
-    }
-    input, select, button {
-      padding: 10px;
-      margin: 8px 0;
-      border: none;
-      border-radius: 6px;
-      font-size: 16px;
-    }
-    input, select {
-      width: 100%;
-      background-color: #1e1e1e;
-      color: white;
-    }
-    button {
-      background-color: #6200ee;
-      color: white;
-      cursor: pointer;
-      transition: background-color 0.3s ease;
-      width: 100%;
-    }
-    button:hover {
-      background-color: #3700b3;
-    }
-    .toast {
-      margin-top: 10px;
-      padding: 12px;
-      border-radius: 8px;
-      font-size: 16px;
-      display: none;
-      text-align: center;
-    }
-    .toast.success { background-color: #2e7d32; color: #fff; }
-    .toast.error { background-color: #c62828; color: #fff; }
-    canvas {
-      background: #1e1e1e;
-      border-radius: 8px;
-      padding: 10px;
-      margin-top: 20px;
-    }
-    #adminPanel {
-      display: none; 
-      max-width: 500px;
-      margin: auto;
-    }
-    #imagePreview {
-      display: none;
-      margin: 10px auto;
-      max-width: 100%;
-      border-radius: 10px;
-      border: 2px solid #444;
-    }
-  </style>
+<style>
+body { font-family:sans-serif; background:#111; color:white; padding:20px; }
+h1 { text-align:center; color:#00f5c4; }
+form { max-width:400px; margin:0 auto; text-align:center; }
+input, select { width:100%; padding:10px; margin:8px 0; border-radius:6px; border:none; }
+button { padding:10px 20px; margin:8px; cursor:pointer; border:none; border-radius:5px; background:#00f5c4; color:#111; }
+.delete { background:#ff4f4f; color:white; }
+#studentsTable { width:100%; border-collapse: collapse; margin-top:20px; background:#222; display:none; }
+th, td { border:1px solid #444; padding:10px; text-align:center; font-size:14px; }
+#status { text-align:center; color:#00f5c4; margin:10px; }
+#error { text-align:center; color:#ff4f4f; margin:10px; }
+#filters { display:none; text-align:center; margin-bottom:15px; }
+#summary { text-align:center; margin:10px; color:#00f5c4; font-size:16px; }
+</style>
 </head>
 <body>
 
-  <h2>🔑 تسجيل الدخول</h2>
-  <input type="email" id="emailInput" placeholder="البريد الإلكتروني"><br>
-  <input type="password" id="passwordInput" placeholder="كلمة المرور"><br>
-  <button onclick="login()">تسجيل الدخول</button>
+<h1>لوحة الإدارة</h1>
 
-  <div id="toast" class="toast"></div>
+<!-- فورم تسجيل الدخول -->
+<div id="loginDiv">
+  <form id="adminLogin">
+    <input type="email" id="adminEmail" placeholder="البريد الإلكتروني" required>
+    <input type="password" id="adminPassword" placeholder="كلمة المرور" required>
+    <button type="submit">تسجيل الدخول</button>
+  </form>
+</div>
 
-  <!-- لوحة نشر الفيديوهات -->
-  <div id="adminPanel">
-    <h2>📤 نشر فيديو جديد</h2>
-    <input type="text" id="titleInput" placeholder="عنوان الفيديو"><br>
-    <input type="text" id="urlInput" placeholder="رابط الفيديو بصيغة embed"><br>
-    <input type="text" id="imageInput" placeholder="رابط صورة الفيديو (thumbnail)" oninput="previewImage()"><br>
-    <img id="imagePreview" alt="معاينة الصورة">
+<p id="status"></p>
+<p id="error"></p>
 
-    <select id="subjectInput" onchange="updateTeachers()">
-      <option value="" disabled selected>اختر المادة</option>
-      <option value="عربي">عربي</option>
-      <option value="إنجليزي">إنجليزي</option>
-      <option value="جغرافيا">جغرافيا</option>
-      <option value="تاريخ">تاريخ</option>
-      <option value="فيزياء">فيزياء</option>
-      <option value="كيمياء">كيمياء</option>
-      <option value="أحياء">أحياء</option>
-      <option value="ادبي">ادبي</option>
-      <option value="رياضه">رياضه</option>
-    </select><br>
+<div id="filters">
+  <input type="text" id="searchInput" placeholder="🔍 بحث بالاسم أو رقم الهاتف">
+  <select id="typeFilter">
+    <option value="all">كل الأنواع</option>
+    <option value="paid">المدفوعين</option>
+    <option value="trial">التجربة</option>
+  </select>
 
-    <select id="teacherInput" disabled>
-      <option value="" disabled selected>اختر مدرس</option>
-    </select><br>
+  <select id="weekFilter">
+    <option value="all">كل الأسابيع</option>
+    <option value="0">الأسبوع الحالي</option>
+    <option value="1">الأسبوع الماضي</option>
+    <option value="2">من أسبوعين</option>
+  </select>
 
-    <select id="chapterInput">
-      <option value="">-- اختر الباب (اختياري) --</option>
-      <option value="الباب الأول">الباب الأول</option>
-      <option value="الباب الثاني">الباب الثاني</option>
-      <option value="الباب الثالث">الباب الثالث</option>
-      <option value="المراجعات">المراجعات</option>
-      <option value="المعسكرات">المعسكرات</option>
-    </select><br>
+  <button onclick="applyFilters()">تصفية</button>
+</div>
 
-    <button onclick="publishVideo()">نشر الفيديو</button>
+<p id="summary"></p>
 
-    <h2>📊 إحصائيات الفيديوهات حسب المادة</h2>
-    <canvas id="videosChart" width="400" height="200"></canvas>
-  </div>
+<table id="studentsTable">
+  <thead>
+    <tr>
+      <th>الاسم</th>
+      <th>الهاتف</th>
+      <th>Device ID</th>
+      <th>النوع</th>
+      <th>تاريخ البداية</th>
+      <th>موعد الانتهاء</th>
+      <th>إجراء</th>
+    </tr>
+  </thead>
+  <tbody id="studentsBody"></tbody>
+</table>
 
-  <script>
-    // إعدادات Firebase
-    const firebaseConfig = {
-      apiKey: "AIzaSyCdhj73cKJc2J2_tDHw2-89EemZx-EGMJQ",
-      authDomain: "alamer-526ff.firebaseapp.com",
-      databaseURL: "https://alamer-526ff-default-rtdb.firebaseio.com",
-      projectId: "alamer-526ff",
-      storageBucket: "alamer-526ff.firebasestorage.app",
-      messagingSenderId: "523879269039",
-      appId: "1:523879269039:web:634861aa34641bfebf8a5a",
-      measurementId: "G-4L48BTMLHB"
-    };
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCdhj73cKJc2J2_tDHw2-89EemZx-EGMJQ",
+  authDomain: "alamer-526ff.firebaseapp.com",
+  databaseURL: "https://alamer-526ff-default-rtdb.firebaseio.com",
+  projectId: "alamer-526ff",
+  storageBucket: "alamer-526ff.appspot.com",
+  messagingSenderId: "523879269039",
+  appId: "1:523879269039:web:634861aa34641bfebf8a5a"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const auth = firebase.auth();
 
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    const auth = firebase.auth();
+const studentsBody = document.getElementById("studentsBody");
+const statusEl = document.getElementById("status");
+const errorEl = document.getElementById("error");
+const tableEl = document.getElementById("studentsTable");
+const loginDiv = document.getElementById("loginDiv");
+const summary = document.getElementById("summary");
 
-    // 🔐 UID الأدمن
-    const ADMIN_UID ="Se5eNLTKoqUGjeShmRJRHDiKogF3";
+const adminUid = "CiYcWf7Xo5Yzex4fslyWO40FyQh2";
+let studentsData = {};
 
-    // تسجيل الدخول
-    function login() {
-      const email = document.getElementById("emailInput").value.trim();
-      const password = document.getElementById("passwordInput").value.trim();
+document.getElementById("adminLogin").addEventListener("submit", e=>{
+  e.preventDefault();
+  errorEl.textContent="";
+  statusEl.textContent="جارٍ تسجيل الدخول...";
+  const email = document.getElementById("adminEmail").value.trim();
+  const password = document.getElementById("adminPassword").value.trim();
 
-      auth.signInWithEmailAndPassword(email, password)
-        .then(userCredential => {
-          const user = userCredential.user;
-          if (user.uid === ADMIN_UID) {
-            showToast("تم تسجيل الدخول كأدمن ✅");
-            document.getElementById("adminPanel").style.display = "block";
-          } else {
-            showToast("❌ هذا الحساب ليس أدمن", true);
-            auth.signOut();
-          }
-        })
-        .catch(error => {
-          showToast("خطأ: " + error.message, true);
-        });
-    }
-
-    // تعريف المدرسين لكل مادة
-    const teachersPerSubject = {
-      "عربي": ["محمد صلاح", "رضا فاروق", "مدرس ج"],
-      "إنجليزي": ["مس مي","انجلشاوي", "وائل ميلاد"],
-      "جغرافيا": ["مدرس 1", "مدرس 2", "مدرس 3"],
-      "رياضه": ["احمد عصام", "مدرس 2", "مدرس 3"],
-      "فيزياء": ["كيرلس القص", "عبد المعبود", "حسام خليل", "فيزيائي 3"],
-      "كيمياء": ["خالد صقر", "عبد الجواد", "جون جهبذ"],
-      "أحياء": ["احمد الجوهري", "احمد ايمن", "الجيو", "امنيه السيد"],
-      "ادبي": ["المؤرخ(ت)", "القيصر(ج)", "جيو ماجد", "جوهري(جيو)"]
-    };
-
-    function updateTeachers() {
-      const subject = document.getElementById("subjectInput").value;
-      const teacherSelect = document.getElementById("teacherInput");
-      teacherSelect.innerHTML = '<option value="" disabled selected>اختر مدرس</option>';
-
-      if (!subject || !teachersPerSubject[subject]) {
-        teacherSelect.disabled = true;
+  auth.signInWithEmailAndPassword(email,password)
+    .then(res=>{
+      if(res.user.uid !== adminUid){
+        errorEl.textContent="❌ هذا الحساب ليس مسؤولاً.";
+        statusEl.textContent="";
+        auth.signOut();
         return;
       }
-
-      teachersPerSubject[subject].forEach(teacher => {
-        const option = document.createElement("option");
-        option.value = teacher;
-        option.textContent = teacher;
-        teacherSelect.appendChild(option);
-      });
-      teacherSelect.disabled = false;
-    }
-
-    // معاينة الصورة
-    function previewImage() {
-      const url = document.getElementById("imageInput").value.trim();
-      const preview = document.getElementById("imagePreview");
-      if (url) {
-        preview.src = url;
-        preview.style.display = "block";
-      } else {
-        preview.style.display = "none";
-      }
-    }
-
-    // نشر الفيديو
-    function publishVideo() {
-      const title = document.getElementById("titleInput").value.trim();
-      const url = document.getElementById("urlInput").value.trim();
-      const imageUrl = document.getElementById("imageInput").value.trim();
-      const subject = document.getElementById("subjectInput").value;
-      const teacher = document.getElementById("teacherInput").value;
-      const chapter = document.getElementById("chapterInput").value;
-
-      if (!title || !url || !imageUrl || !subject || !teacher) {
-        showToast("من فضلك املأ كل الحقول المطلوبة", true);
-        return;
-      }
-
-      const videoId = Date.now();
-      db.ref("videos/" + videoId).set({
-        title, url, imageUrl, subject, teacher, chapter: chapter || null, createdAt: new Date().toISOString()
-      }, (error) => {
-        if (error) {
-          showToast("حدث خطأ أثناء النشر، حاول مرة أخرى.", true);
-        } else {
-          showToast("✅ تم النشر بنجاح");
-          document.getElementById("titleInput").value = "";
-          document.getElementById("urlInput").value = "";
-          document.getElementById("imageInput").value = "";
-          document.getElementById("subjectInput").selectedIndex = 0;
-          document.getElementById("teacherInput").innerHTML = '<option value="" disabled selected>اختر مدرس</option>';
-          document.getElementById("teacherInput").disabled = true;
-          document.getElementById("chapterInput").selectedIndex = 0;
-          previewImage();
-        }
-      });
-    }
-
-    // توست
-    function showToast(message, isError = false) {
-      const toast = document.getElementById("toast");
-      toast.textContent = message;
-      toast.className = "toast " + (isError ? "error" : "success");
-      toast.style.display = "block";
-      setTimeout(() => { toast.style.display = "none"; }, 3000);
-    }
-
-    // إحصائيات الفيديوهات
-    const subjects = ["عربي", "إنجليزي", "جغرافيا", "تاريخ", "فيزياء", "كيمياء", "أحياء", "ادبي"];
-    let counts = {};
-    subjects.forEach(sub => counts[sub] = 0);
-
-    db.ref("videos").on("value", (snapshot) => {
-      subjects.forEach(sub => counts[sub] = 0);
-      snapshot.forEach(child => {
-        const data = child.val();
-        if (counts[data.subject] !== undefined) {
-          counts[data.subject]++;
-        }
-      });
-      updateChart();
+      statusEl.textContent="✅ تم تسجيل الدخول كمسؤول.";
+      loginDiv.style.display="none";
+      tableEl.style.display="table";
+      document.getElementById("filters").style.display="block";
+      loadStudents();
+    })
+    .catch(err=>{
+      errorEl.textContent="❌ فشل تسجيل الدخول. تحقق من البريد وكلمة المرور.";
+      console.error(err);
     });
+});
 
-    let chart;
-    function updateChart() {
-      const ctx = document.getElementById("videosChart").getContext("2d");
-      if (chart) chart.destroy();
+function loadStudents(){
+  studentsBody.innerHTML="";
+  db.ref("approvedStudents").once("value")
+    .then(snapshot=>{
+      if(!snapshot.exists()){
+        studentsBody.innerHTML="<tr><td colspan='7'>لا يوجد طلاب.</td></tr>";
+        return;
+      }
+      studentsData = snapshot.val();
+      renderStudents(studentsData);
+    })
+    .catch(err=>{
+      errorEl.textContent="❌ حدث خطأ أثناء تحميل البيانات.";
+      console.error(err);
+    });
+}
 
-      chart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: subjects,
-          datasets: [{
-            label: 'عدد الفيديوهات',
-            data: subjects.map(sub => counts[sub]),
-            backgroundColor: 'rgba(98, 0, 238, 0.7)',
-            borderColor: 'rgba(98, 0, 238, 1)',
-            borderWidth: 1,
-            borderRadius: 6
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: { legend: { display: false }},
-          scales: {
-            y: { beginAtZero: true, ticks: { color: "white" }},
-            x: { ticks: { color: "white" }}
-          }
-        }
-      });
+function renderStudents(data){
+  studentsBody.innerHTML="";
+  let count = 0;
+  let total = 0;
+  for(const uid in data){
+    const s = data[uid];
+    const expiryDate = s.expiry ? new Date(s.expiry).toLocaleDateString("ar-EG") : "-";
+    const startDate = s.startDate ? new Date(s.startDate).toLocaleDateString("ar-EG") : "-";
+    const type = s.type === "paid" ? "💰 مدفوع" : "🎁 تجربة";
+    if(s.type === "paid") total += 100; // فرضًا الاشتراك الشهري = 100 جنيه
+    count++;
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${s.name || "-"}</td>
+      <td>${s.phone || "-"}</td>
+      <td>${s.deviceId || "-"}</td>
+      <td>${type}</td>
+      <td>${startDate}</td>
+      <td>${expiryDate}</td>
+      <td><button class="delete" onclick="deleteStudent('${uid}','${s.name || ''}')">حذف</button></td>
+    `;
+    studentsBody.appendChild(tr);
+  }
+  summary.textContent = `👥 عدد الطلاب: ${count} | 💵 إجمالي المبلغ: ${total} جنيه`;
+}
+
+function applyFilters(){
+  const searchValue = document.getElementById("searchInput").value.trim().toLowerCase();
+  const typeFilter = document.getElementById("typeFilter").value;
+  const weekFilter = document.getElementById("weekFilter").value;
+  const now = new Date();
+
+  const filtered = {};
+  for(const uid in studentsData){
+    const s = studentsData[uid];
+    if(typeFilter !== "all" && s.type !== typeFilter) continue;
+
+    if(searchValue){
+      const nameMatch = (s.name || "").toLowerCase().includes(searchValue);
+      const phoneMatch = (s.phone || "").toLowerCase().includes(searchValue);
+      if(!nameMatch && !phoneMatch) continue;
     }
-  </script>
+
+    if(weekFilter !== "all" && s.startDate){
+      const start = new Date(s.startDate);
+      const diffWeeks = Math.floor((now - start) / (7*24*60*60*1000));
+      if(diffWeeks != weekFilter) continue;
+    }
+
+    filtered[uid] = s;
+  }
+  renderStudents(filtered);
+}
+
+function deleteStudent(uid,name){
+  if(confirm(`هل أنت متأكد من حذف ${name || 'هذا الطالب'}؟`)){
+    db.ref("approvedStudents/"+uid).remove()
+      .then(()=>{
+        statusEl.textContent=`✅ تم حذف ${name || "الطالب"} بنجاح.`;
+        loadStudents();
+      })
+      .catch(err=>{
+        errorEl.textContent="❌ حدث خطأ أثناء الحذف.";
+        console.error(err);
+      });
+  }
+}
+</script>
 </body>
 </html>
