@@ -125,6 +125,9 @@ function loadStudents(){
 
       allStudents = snapshot.val();
       displayStudents(allStudents);
+
+      // تشغيل حذف الاشتراكات المنتهية
+      autoDeleteExpiredStudents();
     })
     .catch(err=>{
       errorEl.textContent="❌ حدث خطأ أثناء تحميل البيانات.";
@@ -174,7 +177,7 @@ searchInput.addEventListener("input", ()=>{
   displayStudents(filtered);
 });
 
-// حذف طالب
+// حذف طالب يدوي
 function deleteStudent(uid,name){
   if(confirm(`هل أنت متأكد من حذف ${name || 'هذا الطالب'}؟`)){
     db.ref("approvedStudents/"+uid).remove()
@@ -188,6 +191,42 @@ function deleteStudent(uid,name){
       });
   }
 }
+
+// 🔥 حذف الاشتراكات المنتهية تلقائيًا
+function autoDeleteExpiredStudents() {
+  const now = new Date();
+  let deletedCount = 0;
+
+  db.ref("approvedStudents").once("value")
+    .then(snapshot => {
+      if (!snapshot.exists()) return;
+
+      snapshot.forEach(child => {
+        const uid = child.key;
+        const data = child.val();
+        if (data.expiry) {
+          const expiryDate = new Date(data.expiry);
+          if (expiryDate < now) {
+            db.ref("approvedStudents/" + uid).remove()
+              .then(() => {
+                deletedCount++;
+                console.log(`🚮 تم حذف الطالب ${data.name || uid} لانتهاء الاشتراك.`);
+              })
+              .catch(err => console.error("خطأ أثناء الحذف:", err));
+          }
+        }
+      });
+
+      if (deletedCount > 0) {
+        statusEl.textContent = `🚮 تم حذف ${deletedCount} من الطلاب لانتهاء الاشتراك.`;
+        loadStudents(); // تحديث الجدول بعد الحذف
+      }
+    })
+    .catch(err => console.error("خطأ أثناء التحقق من الاشتراكات:", err));
+}
+
+// تكرار الفحص كل 5 دقائق
+setInterval(autoDeleteExpiredStudents, 5 * 60 * 1000);
 </script>
 </body>
 </html>
