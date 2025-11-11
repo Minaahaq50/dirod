@@ -8,6 +8,8 @@
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
 body {
@@ -20,13 +22,22 @@ body {
 
 h1 {
   color: #00f5c4;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
+}
+
+canvas {
+  max-width: 800px;
+  margin: 20px auto;
+  display: block;
+  background: #1a1a1a;
+  border-radius: 10px;
+  padding: 10px;
 }
 
 table {
   width: 100%;
   max-width: 800px;
-  margin: 0 auto;
+  margin: 20px auto;
   border-collapse: collapse;
   background: #1a1a1a;
   border-radius: 10px;
@@ -35,18 +46,13 @@ table {
 }
 
 th, td {
-  padding: 15px;
+  padding: 12px;
   border-bottom: 1px solid #333;
 }
 
 th {
-  background: #00f5c410;
+  background: #00f5c420;
   color: #00f5c4;
-  font-size: 16px;
-}
-
-td {
-  font-size: 15px;
 }
 
 tr:hover {
@@ -61,8 +67,10 @@ tr:hover {
 </head>
 <body>
 
-<h1>📊 أرباح الاشتراكات الأسبوعية</h1>
-<p id="status">جارٍ تحميل البيانات...</p>
+<h1>📊 لوحة أرباح الاشتراكات الأسبوعية</h1>
+<p id="status">جارٍ حساب الأرباح...</p>
+
+<canvas id="earningsChart" height="150"></canvas>
 
 <table id="earningsTable">
   <thead>
@@ -89,13 +97,24 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-const tableBody = document.getElementById("tableBody");
 const statusEl = document.getElementById("status");
+const tableBody = document.getElementById("tableBody");
+const chartCanvas = document.getElementById("earningsChart");
 
-const subscriptionPrice = 100; // سعر الاشتراك
-const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+const subscriptionPrice = 100; // سعر الاشتراك الشهري
+const DAY = 24 * 60 * 60 * 1000;
+const WEEK = 7 * DAY;
+const MONTH = 30 * DAY;
 
-// 🔹 تحميل المشتركين وحساب الأرباح
+// 🔹 تحديد أول الأسبوع بحيث ينتهي يوم الاثنين
+function getWeekNumber(timestamp) {
+  const mondayOffset = 1; // الاثنين
+  const baseDate = new Date(2024, 0, 1);
+  const diff = timestamp - baseDate.getTime();
+  const adjusted = diff - ((baseDate.getDay() - mondayOffset + 7) % 7) * DAY;
+  return Math.floor(adjusted / WEEK);
+}
+
 function calculateWeeklyEarnings() {
   db.ref("approvedStudents").once("value").then(snapshot => {
     if (!snapshot.exists()) {
@@ -104,52 +123,84 @@ function calculateWeeklyEarnings() {
     }
 
     const now = Date.now();
-    const firstWeek = new Date(2024, 0, 1).getTime(); // بداية السنة
-    const currentWeek = Math.floor((now - firstWeek) / msPerWeek);
-
     let weeklyData = {};
 
     snapshot.forEach(child => {
       const data = child.val();
       const approvedAt = data.approvedAt || 0;
       const expiry = data.expiry || 0;
+
+      if (!approvedAt || !expiry) return;
+
       const duration = expiry - approvedAt;
-      const twoDays = 2 * 24 * 60 * 60 * 1000;
+      const isPaid = duration > 2 * DAY;
+      if (!isPaid) return;
 
-      if (duration <= twoDays) return; // تجاهل التجربة
-
-      const weekNum = Math.floor((approvedAt - firstWeek) / msPerWeek);
-      if (!weeklyData[weekNum]) {
-        weeklyData[weekNum] = { count: 0, total: 0 };
+      // 🔁 احسب كل 30 يوم كاشتراك جديد
+      const monthsCount = Math.ceil(duration / MONTH);
+      for (let i = 0; i < monthsCount; i++) {
+        const monthStart = approvedAt + i * MONTH;
+        const weekNum = getWeekNumber(monthStart);
+        if (!weeklyData[weekNum]) weeklyData[weekNum] = { count: 0, total: 0 };
+        weeklyData[weekNum].count++;
+        weeklyData[weekNum].total += subscriptionPrice;
       }
-      weeklyData[weekNum].count++;
-      weeklyData[weekNum].total += subscriptionPrice;
     });
 
-    // حفظ الأرباح في قاعدة البيانات
     db.ref("weeklyEarnings").set(weeklyData);
-
-    // عرضها في الجدول
-    renderTable(weeklyData, currentWeek);
-    statusEl.textContent = "✅ تم تحميل أرباح الأسابيع بنجاح.";
+    renderTable(weeklyData);
+    renderChart(weeklyData);
+    statusEl.textContent = "✅ تم حساب الأرباح الأسبوعية بنجاح.";
   });
 }
 
-function renderTable(weeklyData, currentWeek) {
+// 🔹 عرض الجدول
+function renderTable(weeklyData) {
   tableBody.innerHTML = "";
   const sortedWeeks = Object.keys(weeklyData).sort((a,b)=>b-a);
+  const now = Date.now();
+  const currentWeek = getWeekNumber(now);
 
   sortedWeeks.forEach(weekNum => {
     const w = weeklyData[weekNum];
-    const weekLabel = (weekNum == currentWeek) ? "الأسبوع الحالي" : `الأسبوع ${weekNum}`;
-    const row = `
+    const label = (weekNum == currentWeek) ? "الأسبوع الحالي" : `الأسبوع ${weekNum}`;
+    const tr = `
       <tr style="${weekNum == currentWeek ? 'background:#00f5c420;' : ''}">
-        <td>${weekLabel}</td>
+        <td>${label}</td>
         <td>${w.count}</td>
         <td>${w.total}</td>
-      </tr>
-    `;
-    tableBody.insertAdjacentHTML("beforeend", row);
+      </tr>`;
+    tableBody.insertAdjacentHTML("beforeend", tr);
+  });
+}
+
+// 🔹 رسم المخطط البياني
+function renderChart(weeklyData) {
+  const labels = Object.keys(weeklyData).sort((a,b)=>a-b);
+  const earnings = labels.map(week => weeklyData[week].total);
+
+  new Chart(chartCanvas, {
+    type: "bar",
+    data: {
+      labels: labels.map(w => `أسبوع ${w}`),
+      datasets: [{
+        label: "الأرباح الأسبوعية (جنيه)",
+        data: earnings,
+        backgroundColor: "#00f5c4aa",
+        borderColor: "#00f5c4",
+        borderWidth: 2,
+        borderRadius: 5
+      }]
+    },
+    options: {
+      scales: {
+        x: { ticks: { color: "#fff" } },
+        y: { ticks: { color: "#fff" }, beginAtZero: true }
+      },
+      plugins: {
+        legend: { labels: { color: "#00f5c4" } }
+      }
+    }
   });
 }
 
@@ -157,3 +208,4 @@ calculateWeeklyEarnings();
 </script>
 </body>
 </html>
+
