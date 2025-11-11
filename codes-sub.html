@@ -19,6 +19,8 @@ button { padding:10px 20px; margin:8px; cursor:pointer; border:none; border-radi
 th, td { border:1px solid #444; padding:10px; text-align:center; font-size:14px; }
 #status { text-align:center; color:#00f5c4; margin:10px; }
 #error { text-align:center; color:#ff4f4f; margin:10px; }
+#searchDiv { text-align:center; margin:15px auto; max-width:400px; display:none; }
+#searchInput { width:100%; padding:10px; border-radius:6px; border:none; text-align:center; }
 </style>
 </head>
 <body>
@@ -32,6 +34,11 @@ th, td { border:1px solid #444; padding:10px; text-align:center; font-size:14px;
     <input type="password" id="adminPassword" placeholder="كلمة المرور" required>
     <button type="submit">تسجيل الدخول</button>
   </form>
+</div>
+
+<!-- مربع البحث -->
+<div id="searchDiv">
+  <input type="text" id="searchInput" placeholder="ابحث بالاسم أو رقم الهاتف...">
 </div>
 
 <p id="status"></p>
@@ -69,8 +76,12 @@ const statusEl = document.getElementById("status");
 const errorEl = document.getElementById("error");
 const tableEl = document.getElementById("studentsTable");
 const loginDiv = document.getElementById("loginDiv");
+const searchDiv = document.getElementById("searchDiv");
+const searchInput = document.getElementById("searchInput");
 
-// UID الخاص بالأدمن (من Firebase Auth)
+let allStudents = {}; // حفظ البيانات مؤقتًا للبحث
+
+// UID الخاص بالأدمن
 const adminUid = "CiYcWf7Xo5Yzex4fslyWO40FyQh2";
 
 // تسجيل دخول الأدمن
@@ -93,6 +104,7 @@ document.getElementById("adminLogin").addEventListener("submit", e=>{
       statusEl.textContent="✅ تم تسجيل الدخول كمسؤول.";
       loginDiv.style.display="none";
       tableEl.style.display="table";
+      searchDiv.style.display="block";
       loadStudents();
     })
     .catch(err=>{
@@ -110,27 +122,57 @@ function loadStudents(){
         studentsBody.innerHTML="<tr><td colspan='5'>لا يوجد طلاب.</td></tr>";
         return;
       }
-      snapshot.forEach(child=>{
-        const uid = child.key;
-        const data = child.val();
-        const expiryDate = data.expiry ? new Date(data.expiry).toLocaleString("ar-EG") : "غير محدد";
 
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${data.name || "-"}</td>
-          <td>${data.phone || "-"}</td>
-          <td>${data.deviceId || "-"}</td>
-          <td>${expiryDate}</td>
-          <td><button class="delete" onclick="deleteStudent('${uid}','${data.name || ''}')">حذف</button></td>
-        `;
-        studentsBody.appendChild(tr);
-      });
+      allStudents = snapshot.val();
+      displayStudents(allStudents);
     })
     .catch(err=>{
       errorEl.textContent="❌ حدث خطأ أثناء تحميل البيانات.";
       console.error(err);
     });
 }
+
+// عرض الطلاب
+function displayStudents(students){
+  studentsBody.innerHTML="";
+  const entries = Object.entries(students);
+  if(entries.length === 0){
+    studentsBody.innerHTML="<tr><td colspan='5'>لا يوجد نتائج.</td></tr>";
+    return;
+  }
+
+  entries.forEach(([uid,data])=>{
+    const expiryDate = data.expiry ? new Date(data.expiry).toLocaleString("ar-EG") : "غير محدد";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${data.name || "-"}</td>
+      <td>${data.phone || "-"}</td>
+      <td>${data.deviceId || "-"}</td>
+      <td>${expiryDate}</td>
+      <td><button class="delete" onclick="deleteStudent('${uid}','${data.name || ''}')">حذف</button></td>
+    `;
+    studentsBody.appendChild(tr);
+  });
+}
+
+// البحث في الاسم أو الهاتف
+searchInput.addEventListener("input", ()=>{
+  const q = searchInput.value.trim().toLowerCase();
+  if(!q){
+    displayStudents(allStudents);
+    return;
+  }
+
+  const filtered = {};
+  for(const [uid,data] of Object.entries(allStudents)){
+    const name = (data.name || "").toLowerCase();
+    const phone = (data.phone || "").toLowerCase();
+    if(name.includes(q) || phone.includes(q)){
+      filtered[uid] = data;
+    }
+  }
+  displayStudents(filtered);
+});
 
 // حذف طالب
 function deleteStudent(uid,name){
