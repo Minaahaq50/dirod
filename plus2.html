@@ -25,7 +25,6 @@ th, td { border:1px solid #444; padding:10px; text-align:center; font-size:14px;
 
 <h1>لوحة الإدارة</h1>
 
-<!-- فورم تسجيل الدخول -->
 <div id="loginDiv">
   <form id="adminLogin">
     <input type="email" id="adminEmail" placeholder="البريد الإلكتروني" required>
@@ -70,7 +69,6 @@ const errorEl = document.getElementById("error");
 const tableEl = document.getElementById("studentsTable");
 const loginDiv = document.getElementById("loginDiv");
 
-// UID الخاص بالأدمن (من Firebase Auth)
 const adminUid = "D5WJC1kLTRVzqWUadMoWc3RZdUD2";
 
 // تسجيل دخول الأدمن
@@ -104,23 +102,38 @@ document.getElementById("adminLogin").addEventListener("submit", e=>{
 // تحميل الطلاب الموافق عليهم
 function loadStudents(){
   studentsBody.innerHTML="";
+  const now = new Date();
+
   db.ref("approvedStudents").once("value")
     .then(snapshot=>{
       if(!snapshot.exists()){
         studentsBody.innerHTML="<tr><td colspan='5'>لا يوجد طلاب.</td></tr>";
         return;
       }
+
       snapshot.forEach(child=>{
         const uid = child.key;
         const data = child.val();
-        const expiryDate = data.expiry ? new Date(data.expiry).toLocaleString("ar-EG") : "غير محدد";
 
+        // تحقق من تاريخ الانتهاء
+        if(data.expiry){
+          const expiryDate = new Date(data.expiry);
+          if(expiryDate < now){
+            // حذف تلقائي لو منتهي
+            db.ref("approvedStudents/"+uid).remove()
+              .then(()=>console.log(`تم حذف ${data.name || uid} لانتهاء المدة.`))
+              .catch(console.error);
+            return; // ما نعرضوش في الجدول
+          }
+        }
+
+        const expiryText = data.expiry ? new Date(data.expiry).toLocaleString("ar-EG") : "غير محدد";
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${data.name || "-"}</td>
           <td>${data.phone || "-"}</td>
           <td>${data.deviceId || "-"}</td>
-          <td>${expiryDate}</td>
+          <td>${expiryText}</td>
           <td><button class="delete" onclick="deleteStudent('${uid}','${data.name || ''}')">حذف</button></td>
         `;
         studentsBody.appendChild(tr);
@@ -132,7 +145,7 @@ function loadStudents(){
     });
 }
 
-// حذف طالب
+// حذف طالب يدوي
 function deleteStudent(uid,name){
   if(confirm(`هل أنت متأكد من حذف ${name || 'هذا الطالب'}؟`)){
     db.ref("approvedStudents/"+uid).remove()
