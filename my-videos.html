@@ -142,7 +142,7 @@ function loadEarnings() {
 
       // ✅ يظهر فقط اللي بدأ اشتراكه هذا الأسبوع
       if (startDate >= start && startDate <= end) {
-        if (durationDays >= 29) { // من 20 يوم أو أكثر نعتبره اشتراك شهري
+        if (durationDays >= 25) { // من 20 يوم أو أكثر نعتبره اشتراك شهري
           const monthsCount = Math.floor(durationDays / 30) || 1;
           const earnings = monthsCount * monthlyPrice;
           totalEarnings += earnings;
